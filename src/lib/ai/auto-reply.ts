@@ -1,15 +1,23 @@
 import { supabaseAdmin } from './admin-client'
 import { loadAiConfig } from './config'
-import { buildConversationContext } from './context'
+import { buildConversationContext, buildMemory, loadBusinessProfile } from './context'
 import { retrieveKnowledge } from './knowledge'
-import { generateReply } from './generate'
+import { generateReply, generateStructured } from './generate'
 import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
-import { assistantMayReply, transitionHandoff } from '@/lib/conversations/handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
+import { compilePersona } from './persona'
+import { loadLeadLabels } from './labels'
+import { parseStructuredReply, type StructuredReply } from './structured'
+import { GET_ITEM_TOOL, SEARCH_ITEMS_TOOL, runCatalogTool } from './tools/catalog'
+import { AiError } from './types'
 import { engineSendText } from '@/lib/flows/meta-send'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import { assistantMayReply, transitionHandoff } from '@/lib/conversations/handoff'
+import { createTask } from '@/lib/tasks'
+import { assignTask } from '@/lib/routing'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -29,10 +37,20 @@ interface DispatchArgs {
  * runner's contract: it owns its try/catch and NEVER throws — a failing
  * or slow LLM call must not affect the webhook's 200 to Meta.
  *
+ * Since phase 2 the assistant works in structured mode: one model turn
+ * that may look items up in the catalog (never inventing a price) and
+ * ends with a structured reading of the conversation — reply, intent,
+ * item of interest, need, priority, next action, whether a person is
+ * needed, lead label, preferred contact time, summary. That reading is
+ * persisted to conversation_insights (the commercial memory) and turned
+ * into work: a HUMAN_CHAT handoff, or a CALL / APPOINTMENT / QUOTE /
+ * FOLLOW_UP task routed to an advisor. Even when a person is needed the
+ * assistant may still send a short reply (acknowledge, ask when to be
+ * contacted) — the customer is never left hanging.
+ *
  * Eligibility gates (any → silent no-op):
  *   - AI off / auto-reply disabled for the account
- *   - a human agent is assigned (they own the thread)
- *   - auto-reply was disabled for this conversation (prior handoff)
+ *   - the thread is not `ai_active` (a human owns it or it is waiting)
  *   - the per-conversation reply cap is reached
  *   - there's nothing to reply to
  *
@@ -87,47 +105,87 @@ export async function dispatchInboundToAiReply(
     const messages = await buildConversationContext(db, conversationId)
     if (messages.length === 0) return
 
-    // Account-wide throttle on the shared BYO key. The per-conversation
-    // cap bounds one thread; this bounds a burst across many threads (a
-    // marketing blast landing 200 replies at once) so we never run the
-    // owner's key past the provider's rate limit. Over the limit → skip
-    // the auto-reply; the inbound still sits in the inbox for a human.
-    const acctLimit = checkRateLimit(
+    // Per-account throttle: one runaway thread (or a burst from many)
+    // must not spend the account's key faster than a human could read.
+    const limit = checkRateLimit(
       `ai-autoreply:${accountId}`,
       RATE_LIMITS.aiAutoReplyAccount,
     )
-    if (!acctLimit.success) {
+    if (!limit.success) {
       console.warn(
         `[ai auto-reply] account ${accountId} hit the per-account rate limit — skipping this inbound.`,
       )
       return
     }
 
-    // Ground the reply in the account's knowledge base (best-effort).
-    const knowledge = await retrieveKnowledge(
-      db,
-      accountId,
-      config,
-      latestUserMessage(messages),
-    )
+    // Everything the model should know, gathered in parallel: retrieved
+    // knowledge for this question, the always-on business facts, what we
+    // remember about this contact, and the label vocabulary.
+    const [knowledge, businessProfile, memory, labels] = await Promise.all([
+      retrieveKnowledge(db, accountId, config, latestUserMessage(messages)),
+      loadBusinessProfile(db, accountId),
+      buildMemory(db, { accountId, conversationId, contactId }),
+      loadLeadLabels(db, accountId),
+    ])
+    const labelKeys = labels.map((l) => l.key)
+    const personaText = compilePersona(config.persona, {
+      defaultLanguage: process.env.NEXT_PUBLIC_APP_LOCALE || 'es',
+    })
 
-    const systemPrompt = buildSystemPrompt({
+    const structuredPrompt = buildSystemPrompt({
       userPrompt: config.systemPrompt,
       mode: 'auto_reply',
       knowledge,
+      personaText,
+      businessProfile,
+      memory,
+      labels,
+      structured: true,
     })
 
-    const { text, handoff, usage } = await generateReply({
-      config,
-      systemPrompt,
-      messages,
-    })
+    let structured: StructuredReply
+    let usage = null as Awaited<ReturnType<typeof generateStructured>>['usage']
+    try {
+      const result = await generateStructured({
+        config,
+        systemPrompt: structuredPrompt,
+        messages,
+        tools: [SEARCH_ITEMS_TOOL, GET_ITEM_TOOL],
+        runTool: (call) => runCatalogTool(db, accountId, call.name, call.input),
+        labelKeys,
+      })
+      structured = result.structured
+      usage = result.usage
+    } catch (err) {
+      // A provider quirk with tools must never silence the assistant:
+      // fall back to the legacy text turn (same persona and context),
+      // reading the old handoff sentinel into the structured shape.
+      if (!(err instanceof AiError)) throw err
+      console.warn('[ai auto-reply] structured turn failed, falling back to text:', err.message)
+      const legacyPrompt = buildSystemPrompt({
+        userPrompt: config.systemPrompt,
+        mode: 'auto_reply',
+        knowledge,
+        personaText,
+        businessProfile,
+        memory,
+      })
+      const legacy = await generateReply({ config, systemPrompt: legacyPrompt, messages })
+      structured = parseStructuredReply(
+        {
+          reply: legacy.text,
+          needs_human: legacy.handoff,
+          action_type: legacy.handoff ? 'HUMAN_CHAT' : 'AI_CONTINUE',
+          summary: '',
+        },
+        { labelKeys },
+      )
+      usage = legacy.usage
+    }
 
     // Record token spend on the account's BYO key. Fire-and-forget so it
     // never adds latency to the customer-facing send: `logAiUsage`
     // swallows its own errors, so the floating promise can't reject.
-    // Logged regardless of handoff — the provider call happened either
-    // way.
     void logAiUsage(db, {
       accountId,
       conversationId,
@@ -137,23 +195,51 @@ export async function dispatchInboundToAiReply(
       usage,
     })
 
-    if (handoff || !text) {
-      // The model can't (or shouldn't) answer — stop auto-replying on
-      // this thread and hand it to a human. We (a) pause the bot here
-      // (sticky until re-enabled), (b) route the conversation to the
-      // configured handoff agent — null leaves it in the shared queue —
-      // and (c) leave a short internal note so whoever picks it up has
-      // context. Assigning fires the `on_conversation_assigned` trigger,
-      // which notifies the agent.
-      const summary = buildHandoffSummary({
-        messages,
-        replyCount: conv.ai_reply_count ?? 0,
+    // The commercial memory: what the assistant understood, kept per
+    // conversation (= per contact). Best-effort, never blocks the reply.
+    await persistInsight(db, { accountId, conversationId, contactId, structured })
+
+    const summaryText =
+      structured.summary ||
+      buildHandoffSummary({ messages, replyCount: conv.ai_reply_count ?? 0 })
+
+    // Send the reply first (when there is one and a slot is free) so the
+    // customer hears back even when a person is being lined up. The
+    // atomic claim keeps the per-conversation cap exact under concurrent
+    // inbounds: consume a slot slightly before the send lands — fail-safe:
+    // under-reply rather than over-reply.
+    if (structured.reply) {
+      const { data: claimed, error: claimErr } = await db.rpc('claim_ai_reply_slot', {
+        conversation_id: conversationId,
+        max_replies: config.autoReplyMaxPerConversation,
       })
-      // One transition through the single writer of handoff state: a
-      // configured handoff agent takes the thread (human_active); with
-      // none configured it goes to the shared queue (waiting_for_human)
-      // where the work-queue and the shift-start job can see it. Never
-      // stomps an existing human assignment.
+      if (claimErr) {
+        // A real error here (vs. losing the cap race) is almost always a
+        // deploy issue — e.g. `claim_ai_reply_slot` not EXECUTE-able by the
+        // service role, or the migration not applied. Log it loudly: a
+        // silent return makes "auto-reply never fires" undiagnosable.
+        console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr)
+      } else if (claimed === true) {
+        await engineSendText({
+          accountId,
+          userId: configOwnerUserId,
+          conversationId,
+          contactId,
+          text: structured.reply,
+          aiGenerated: true,
+        })
+      }
+    }
+
+    if (!structured.needsHuman) return
+
+    if (structured.actionType === 'HUMAN_CHAT' || !structured.reply) {
+      // A person must take the chat itself. One transition through the
+      // single writer of handoff state: a configured handoff agent takes
+      // the thread (human_active); with none configured it goes to the
+      // shared queue (waiting_for_human), where the 041 trigger opens the
+      // HUMAN_CHAT task and the shift-start job can see it. Never stomps
+      // an existing human assignment.
       if (config.handoffAgentId && !conv.assigned_agent_id) {
         await transitionHandoff(db, {
           conversationId,
@@ -161,7 +247,7 @@ export async function dispatchInboundToAiReply(
           to: 'human_active',
           reason: 'ai_requested',
           assignTo: config.handoffAgentId,
-          summary,
+          summary: summaryText,
         })
       } else {
         await transitionHandoff(db, {
@@ -169,43 +255,171 @@ export async function dispatchInboundToAiReply(
           accountId,
           to: 'waiting_for_human',
           reason: 'ai_requested',
-          summary,
+          summary: summaryText,
         })
+        await enrichHumanChatTask(db, { accountId, conversationId, structured })
       }
       return
     }
 
-    // Atomically claim a reply slot: the cap check + increment happen in
-    // one UPDATE, so concurrent inbounds can never overshoot the cap. If
-    // another inbound just took the last slot, `claimed` is false and we
-    // skip the send. (We consume a slot slightly before the send lands —
-    // fail-safe: under-reply rather than over-reply.)
-    const { data: claimed, error: claimErr } = await db.rpc(
-      'claim_ai_reply_slot',
-      {
-        conversation_id: conversationId,
-        max_replies: config.autoReplyMaxPerConversation,
-      },
-    )
-    if (claimErr) {
-      // A real error here (vs. losing the cap race) is almost always a
-      // deploy issue — e.g. `claim_ai_reply_slot` not EXECUTE-able by the
-      // service role, or the migration not applied. Log it loudly: a
-      // silent return makes "auto-reply never fires" undiagnosable.
-      console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr)
-      return
-    }
-    if (claimed !== true) return // lost the per-conversation cap race
-
-    await engineSendText({
-      accountId,
-      userId: configOwnerUserId,
-      conversationId,
-      contactId,
-      text,
-      aiGenerated: true,
-    })
+    // A call, appointment, quote, follow-up or review: the thread stays
+    // with the assistant (it can keep answering and collecting details)
+    // while the work item goes to the right person — or waits in the
+    // queue for their shift, which is the whole point of phase 1.
+    await createActionTask(db, { accountId, conversationId, contactId, structured, summaryText })
   } catch (err) {
     console.error('[ai auto-reply] dispatch failed:', err)
+  }
+}
+
+// ---------------------------------------------------------------------
+// Persistence helpers
+// ---------------------------------------------------------------------
+
+async function persistInsight(
+  db: SupabaseClient,
+  args: { accountId: string; conversationId: string; contactId: string; structured: StructuredReply },
+): Promise<void> {
+  const { accountId, conversationId, contactId, structured: s } = args
+  try {
+    // A human's label override wins until they change it again.
+    const { data: existing } = await db
+      .from('conversation_insights')
+      .select('lead_label_locked, lead_label_key')
+      .eq('conversation_id', conversationId)
+      .maybeSingle()
+    const keepLabel = existing?.lead_label_locked === true
+    const now = new Date().toISOString()
+
+    const { error } = await db.from('conversation_insights').upsert(
+      {
+        conversation_id: conversationId,
+        account_id: accountId,
+        contact_id: contactId,
+        intent: s.intent,
+        intent_level: s.intentLevel,
+        item_id: s.itemId,
+        item_name: s.itemName,
+        need: s.need,
+        priority: s.priority,
+        preferences: s.preferences,
+        collected_info: s.collectedInfo,
+        next_action: s.nextAction,
+        action_type: s.actionType,
+        needs_human: s.needsHuman,
+        lead_label_key: keepLabel ? (existing?.lead_label_key ?? null) : s.leadLabel,
+        preferred_contact_time: s.preferredContactTime,
+        summary: {
+          text: s.summary,
+          interest: s.itemName,
+          intent_level: s.intentLevel,
+          contact_preference: s.preferredContactTime,
+          needs_human: s.needsHuman,
+          next_action: s.nextAction,
+        },
+        last_extracted_at: now,
+      },
+      { onConflict: 'conversation_id' },
+    )
+    if (error) console.warn('[ai auto-reply] insight upsert failed:', error.message)
+  } catch (err) {
+    console.warn('[ai auto-reply] insight persist threw:', err instanceof Error ? err.message : err)
+  }
+}
+
+/**
+ * The 041 trigger opened a bare HUMAN_CHAT task; give it what the
+ * assistant learned so the queue card is useful and routing can match
+ * the right person.
+ */
+async function enrichHumanChatTask(
+  db: SupabaseClient,
+  args: { accountId: string; conversationId: string; structured: StructuredReply },
+): Promise<void> {
+  const { accountId, conversationId, structured: s } = args
+  try {
+    await db
+      .from('tasks')
+      .update({
+        priority: s.priority,
+        details: s.summary || null,
+        routing: s.itemId ? { item_id: s.itemId } : {},
+        summary: {
+          text: s.summary,
+          interest: s.itemName,
+          need: s.need,
+          contact_preference: s.preferredContactTime,
+          intent_level: s.intentLevel,
+          lead_label: s.leadLabel,
+        },
+      })
+      .eq('account_id', accountId)
+      .eq('conversation_id', conversationId)
+      .eq('action_type', 'HUMAN_CHAT')
+      .in('status', ['pending', 'assigned'])
+  } catch (err) {
+    console.warn('[ai auto-reply] task enrich failed:', err instanceof Error ? err.message : err)
+  }
+}
+
+async function createActionTask(
+  db: SupabaseClient,
+  args: {
+    accountId: string
+    conversationId: string
+    contactId: string
+    structured: StructuredReply
+    summaryText: string
+  },
+): Promise<void> {
+  const { accountId, conversationId, contactId, structured: s, summaryText } = args
+  try {
+    // One open task of this kind per conversation: a customer repeating
+    // "call me" must not fan out into five calls.
+    const { data: open } = await db
+      .from('tasks')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('conversation_id', conversationId)
+      .eq('action_type', s.actionType)
+      .in('status', ['pending', 'assigned', 'in_progress'])
+      .limit(1)
+    if (open && open.length) return
+
+    const { data: contact } = await db
+      .from('contacts')
+      .select('name, phone')
+      .eq('id', contactId)
+      .maybeSingle()
+    const who = contact?.name || contact?.phone || 'Cliente'
+
+    const task = await createTask(db, {
+      accountId,
+      actionType: s.actionType,
+      title: `${who}${s.itemName ? ` · ${s.itemName}` : ''}`,
+      details: [summaryText, s.preferredContactTime ? `Prefiere contacto: ${s.preferredContactTime}` : null]
+        .filter(Boolean)
+        .join('\n'),
+      priority: s.priority,
+      conversationId,
+      contactId,
+      source: 'ai',
+      routing: s.itemId ? { item_id: s.itemId } : {},
+      summary: {
+        text: s.summary,
+        interest: s.itemName,
+        need: s.need,
+        contact_preference: s.preferredContactTime,
+        intent_level: s.intentLevel,
+        lead_label: s.leadLabel,
+        next_action: s.nextAction,
+      },
+    })
+
+    // Route it now; if nobody suitable is on shift it stays pending and
+    // the shift-start cron picks it up.
+    await assignTask(db, { accountId, task, decidedBy: 'ai', reason: 'ai_requested_action' })
+  } catch (err) {
+    console.warn('[ai auto-reply] action task failed:', err instanceof Error ? err.message : err)
   }
 }

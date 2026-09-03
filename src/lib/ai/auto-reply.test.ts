@@ -18,9 +18,39 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock('./config', () => ({ loadAiConfig: h.loadAiConfig }))
-vi.mock('./context', () => ({ buildConversationContext: h.buildConversationContext }))
+vi.mock('./context', () => ({
+  buildConversationContext: h.buildConversationContext,
+  buildMemory: async () => null,
+  loadBusinessProfile: async () => [],
+}))
 vi.mock('./knowledge', () => ({ retrieveKnowledge: h.retrieveKnowledge }))
-vi.mock('./generate', () => ({ generateReply: h.generateReply }))
+vi.mock('./labels', () => ({ loadLeadLabels: async () => [] }))
+// The structured turn is what the dispatcher calls now. The mock routes
+// through `h.generateReply` so every existing assertion on "what the
+// model was asked" and "what it answered" keeps working: the text
+// becomes the reply, the old handoff flag becomes needs_human.
+vi.mock('./generate', async () => {
+  const { parseStructuredReply } = await import('./structured')
+  return {
+    generateReply: h.generateReply,
+    generateStructured: async (args: { labelKeys: string[] }) => {
+      const r = (await h.generateReply(args)) as { text: string; handoff: boolean; usage?: unknown }
+      return {
+        structured: parseStructuredReply(
+          {
+            reply: r.text,
+            needs_human: r.handoff,
+            action_type: r.handoff ? 'HUMAN_CHAT' : 'AI_CONTINUE',
+            summary: '',
+          },
+          { labelKeys: args.labelKeys },
+        ),
+        usage: r.usage ?? null,
+        toolRounds: 0,
+      }
+    },
+  }
+})
 vi.mock('@/lib/flows/meta-send', () => ({ engineSendText: h.engineSendText }))
 vi.mock('./admin-client', () => ({
   supabaseAdmin: () => ({
@@ -36,21 +66,27 @@ vi.mock('./admin-client', () => ({
         }
         return chain
       }
-      // conversations
+      // conversations (and, since phase 2, the best-effort side tables —
+      // conversation_insights, tasks — which share this shape and whose
+      // writes the dispatcher tolerates failing)
+      const rowChain = {
+        eq: () => rowChain,
+        in: () => rowChain,
+        limit: () => Promise.resolve({ data: [], error: null }),
+        maybeSingle: () => Promise.resolve({ data: h.state.conv, error: null }),
+      }
       return {
-        select: () => ({
-          eq: () => ({
-            maybeSingle: () =>
-              Promise.resolve({ data: h.state.conv, error: null }),
-          }),
-        }),
+        select: () => rowChain,
+        upsert: () => Promise.resolve({ error: null }),
         update: (payload: Record<string, unknown>) => {
-          h.state.updatePayload = payload
+          // Only the conversation row is what the assertions are about.
+          if (table === 'conversations') h.state.updatePayload = payload
           // The handoff transition chains `.eq('id').eq('account_id')`, so
           // the builder must stay chainable and only resolve when awaited.
           const chain = {
             eq: () => chain,
             is: () => chain,
+            in: () => chain,
             select: () => Promise.resolve({ data: [{ id: 'conv-1' }], error: null }),
             then: (resolve: (v: { error: null }) => unknown) =>
               Promise.resolve({ error: null }).then(resolve),
@@ -86,6 +122,7 @@ function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
     autoReplyMaxPerConversation: 3,
     handoffAgentId: null,
     embeddingsApiKey: null,
+    persona: {},
     ...overrides,
   }
 }

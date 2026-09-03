@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import type { AiConfig } from './types'
+import type { AiConfig, AiPersona } from './types'
 
 interface AiConfigRow {
   provider: 'openai' | 'anthropic'
@@ -12,10 +12,11 @@ interface AiConfigRow {
   auto_reply_max_per_conversation: number
   handoff_agent_id: string | null
   embeddings_api_key: string | null
+  persona: Record<string, unknown> | null
 }
 
 const CONFIG_COLUMNS =
-  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key'
+  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, persona'
 
 /**
  * Load and decrypt the account's AI config for *use* (draft or
@@ -79,7 +80,33 @@ export async function loadAiConfig(
     autoReplyMaxPerConversation: row.auto_reply_max_per_conversation,
     handoffAgentId: row.handoff_agent_id,
     embeddingsApiKey,
+    // The column is JSONB NOT NULL DEFAULT '{}' (042); rows read before
+    // the migration applied come back undefined — treat both as "unset".
+    persona: normalizePersona(row.persona),
   }
+}
+
+/** Keep only the persona fields we know, with the types we expect. */
+export function normalizePersona(raw: unknown): AiPersona {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const s = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
+  const persona: AiPersona = {
+    name: s(o.name),
+    role: s(o.role),
+    language: s(o.language),
+    region: s(o.region),
+    formality: o.formality === 'tu' || o.formality === 'usted' ? o.formality : undefined,
+    tone: s(o.tone),
+    replyLength:
+      o.reply_length === 'short' || o.reply_length === 'medium' || o.reply_length === 'long'
+        ? o.reply_length
+        : undefined,
+    emojis: typeof o.emojis === 'boolean' ? o.emojis : undefined,
+    style: s(o.style),
+    objective: s(o.objective),
+    specialInstructions: s(o.special_instructions),
+  }
+  return persona
 }
 
 /**

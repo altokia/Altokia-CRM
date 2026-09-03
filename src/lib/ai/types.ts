@@ -29,6 +29,66 @@ export interface AiConfig {
    *  knowledge base is embedded and semantic retrieval turns on; when
    *  null, retrieval falls back to lexical full-text search. */
   embeddingsApiKey: string | null
+  /** No-prompt configuration (migration 042); compiled by lib/ai/persona. */
+  persona: AiPersona
+}
+
+/**
+ * Everything an admin sets about how the assistant talks — without
+ * writing a prompt. All optional; `compilePersona` fills sensible
+ * defaults for the business's locale.
+ */
+export interface AiPersona {
+  name?: string
+  role?: string
+  /** BCP-47-ish, e.g. 'es'. */
+  language?: string
+  /** Free text, e.g. 'Perú'. Drives vocabulary and examples. */
+  region?: string
+  formality?: 'tu' | 'usted'
+  /** e.g. 'cercano', 'profesional', 'comercial', 'técnico'. */
+  tone?: string
+  replyLength?: 'short' | 'medium' | 'long'
+  emojis?: boolean
+  style?: string
+  /** The one thing the assistant is for, e.g. "Convertir consultas en oportunidades comerciales". */
+  objective?: string
+  specialInstructions?: string
+}
+
+/** One tool the model may call during a structured turn. */
+export interface ToolDefinition {
+  name: string
+  description: string
+  /** JSON Schema of the input object. */
+  schema: Record<string, unknown>
+}
+
+export interface ToolCall {
+  id: string
+  name: string
+  input: Record<string, unknown>
+}
+
+export interface ToolResult {
+  callId: string
+  name: string
+  output: unknown
+}
+
+/** One completed exchange: what the model asked for and what it got back. */
+export interface ToolRound {
+  calls: ToolCall[]
+  results: ToolResult[]
+}
+
+/** What a provider adapter returns from ONE round of a tool-enabled call. */
+export interface ProviderToolResult {
+  /** Tool calls the model wants executed this round (may be empty). */
+  calls: ToolCall[]
+  /** Any free text the model produced alongside (usually empty in tool mode). */
+  text: string
+  usage: AiUsage | null
 }
 
 /** A single conversation turn in the shape both providers accept. */
