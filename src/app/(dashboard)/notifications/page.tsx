@@ -5,16 +5,32 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { Notification } from "@/types";
-import { Bell, CheckCheck, Loader2, UserPlus } from "lucide-react";
+import {
+  AlarmClock,
+  Bell,
+  CalendarClock,
+  CheckCheck,
+  ClipboardList,
+  Eye,
+  Hourglass,
+  Loader2,
+  UserPlus,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-// Icon per notification type. Only one type exists today
-// (conversation_assigned) but this keeps future types a one-line add.
+// Icon per notification type. The set was widened in migration 040 for
+// the work queue; a type without an entry here fails typecheck, which
+// is the point — every type ships with its icon.
 const TYPE_ICON: Record<Notification["type"], typeof Bell> = {
   conversation_assigned: UserPlus,
+  conversation_waiting: Hourglass,
+  task_assigned: ClipboardList,
+  task_due: AlarmClock,
+  follow_up_due: CalendarClock,
+  review_required: Eye,
 };
 
 export default function NotificationsPage() {

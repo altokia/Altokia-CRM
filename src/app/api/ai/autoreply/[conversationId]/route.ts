@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
+import { transitionHandoff } from '@/lib/conversations/handoff'
 
 type Params = { params: Promise<{ conversationId: string }> }
 
@@ -62,32 +63,52 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
 
-    const update: Record<string, unknown> = { ai_autoreply_disabled: paused }
-
-    if (paused) {
-      if (assignToMe) update.assigned_agent_id = userId
-    } else {
-      // Resuming hands the thread *back to the bot*. Clear the pause and
-      // the handoff note, and — crucially — release ANY assignment, not
-      // just the caller's own: the auto-reply eligibility gate stands
-      // down whenever a human is assigned, so leaving a stale assignee
-      // (e.g. the agent a prior handoff routed to) would silently keep
-      // the bot muted and make "Resume AI" a no-op. This is the explicit
-      // choice to let the bot own the thread again.
-      update.assigned_agent_id = null
-      // Give the bot a fresh reply budget on this thread. This is a
-      // deliberate, manual, rate-limited action (not automatable), so it
-      // can't be used to bypass the per-conversation cap at scale — it's
-      // a human choosing to re-engage the assistant.
-      update.ai_reply_count = 0
-      update.ai_handoff_summary = null
+    // Both directions go through the single writer of handoff state
+    // (migration 040).
+    //
+    // Pausing: "Take over" makes the thread human_active for the caller.
+    // Pausing without taking it mutes the assistant and leaves ownership
+    // where it was — human_active if someone already holds the thread,
+    // otherwise waiting_for_human so the work queue can see it.
+    //
+    // Resuming hands the thread *back to the bot*: it releases ANY
+    // assignment, not just the caller's own — the eligibility gate stands
+    // down whenever a human is assigned, so a stale assignee would keep
+    // the bot muted and make "Resume AI" a no-op — and gives the bot a
+    // fresh reply budget. This is a deliberate, manual, rate-limited
+    // action (not automatable), so it can't be used to bypass the
+    // per-conversation cap at scale.
+    let upErr: { message: string } | null = null
+    try {
+      if (paused) {
+        let ownerAlready = false
+        if (!assignToMe) {
+          const { data: current } = await supabase
+            .from('conversations')
+            .select('assigned_agent_id')
+            .eq('id', conversationId)
+            .eq('account_id', accountId)
+            .maybeSingle()
+          ownerAlready = Boolean(current?.assigned_agent_id)
+        }
+        await transitionHandoff(supabase, {
+          conversationId,
+          accountId,
+          to: assignToMe || ownerAlready ? 'human_active' : 'waiting_for_human',
+          reason: assignToMe ? 'agent_took_over' : 'agent_paused',
+          assignTo: assignToMe ? userId : undefined,
+        })
+      } else {
+        await transitionHandoff(supabase, {
+          conversationId,
+          accountId,
+          to: 'ai_active',
+          reason: 'manual_resume',
+        })
+      }
+    } catch (e) {
+      upErr = { message: e instanceof Error ? e.message : String(e) }
     }
-
-    const { error: upErr } = await supabase
-      .from('conversations')
-      .update(update)
-      .eq('id', conversationId)
-      .eq('account_id', accountId)
     if (upErr) {
       console.error('[ai/autoreply] update error:', upErr)
       return NextResponse.json(

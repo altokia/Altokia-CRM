@@ -24,6 +24,7 @@ import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
+import { transitionHandoff } from '@/lib/conversations/handoff'
 
 // ------------------------------------------------------------
 // Public API
@@ -496,11 +497,24 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         agentId = profiles?.[0]?.user_id
       }
       if (!agentId) return 'no agent resolved'
-      await db
+      // One conversation per (account, contact) since migration 036, so
+      // this is the thread the step is about. Assignment goes through
+      // the single writer of handoff state (040): the assignee owns the
+      // thread and the assistant stands down.
+      const { data: target } = await db
         .from('conversations')
-        .update({ assigned_agent_id: agentId })
+        .select('id')
         .eq('account_id', args.automation.account_id)
         .eq('contact_id', args.contactId)
+        .maybeSingle()
+      if (!target) return 'no conversation to assign'
+      await transitionHandoff(db, {
+        conversationId: target.id,
+        accountId: args.automation.account_id,
+        to: 'human_active',
+        reason: 'automation_assign',
+        assignTo: agentId,
+      })
       return `assigned to ${agentId}`
     }
 

@@ -7,6 +7,12 @@ import { reopenClosedConversation } from './reopen'
  * inbound message bumped `unread_count` but never touched `status`, so a
  * closed thread accumulated unread customer messages while still reading
  * as resolved and staying out of the inbox's Open filter.
+ *
+ * Since migration 040 the reopen also restores ownership: an assigned
+ * thread goes back to its person (human_active), an unassigned one back
+ * to the assistant (ai_active). That is two guarded UPDATEs of which
+ * exactly one can match, so these tests model a row that is either
+ * assigned or not and assert on the one that fired.
  */
 
 interface Recorded {
@@ -15,14 +21,21 @@ interface Recorded {
   filters: [string, unknown][]
 }
 
-/** Chainable stub shaped like the bit of postgrest this touches. */
-function stubClient(error: { message: string } | null = null) {
+/**
+ * Chainable stub shaped like the bit of postgrest this touches. `assigned`
+ * says which of the two guarded updates the "database" would match.
+ */
+function stubClient(
+  opts: { error?: { message: string } | null; assigned?: boolean } = {},
+) {
+  const { error = null, assigned = false } = opts
   const calls: Recorded[] = []
 
   const client = {
     from(table: string) {
       const rec: Recorded = { table, payload: null, filters: [] }
       calls.push(rec)
+      let matches = true
       const builder = {
         update(payload: Record<string, unknown>) {
           rec.payload = payload
@@ -32,8 +45,23 @@ function stubClient(error: { message: string } | null = null) {
           rec.filters.push([column, value])
           return builder
         },
-        then(onFulfilled: (v: { error: unknown }) => unknown) {
-          return Promise.resolve({ error }).then(onFulfilled)
+        is(column: string, value: unknown) {
+          rec.filters.push([`is:${column}`, value])
+          // `.is('assigned_agent_id', null)` matches only unassigned rows.
+          if (column === 'assigned_agent_id' && value === null) matches = !assigned
+          return builder
+        },
+        not(column: string, op: string, value: unknown) {
+          rec.filters.push([`not:${column}:${op}`, value])
+          // `.not('assigned_agent_id','is',null)` matches only assigned rows.
+          if (column === 'assigned_agent_id' && op === 'is' && value === null) matches = assigned
+          return builder
+        },
+        select() {
+          return Promise.resolve({
+            data: error || !matches ? [] : [{ id: 'conv-1' }],
+            error,
+          })
         },
       }
       return builder
@@ -44,8 +72,8 @@ function stubClient(error: { message: string } | null = null) {
 }
 
 describe('reopenClosedConversation', () => {
-  it('flips a closed conversation back to open', async () => {
-    const { client, calls } = stubClient()
+  it('flips a closed, unassigned conversation back to open and to the assistant', async () => {
+    const { client, calls } = stubClient({ assigned: false })
 
     const reopened = await reopenClosedConversation(client, {
       id: 'conv-1',
@@ -53,13 +81,33 @@ describe('reopenClosedConversation', () => {
     })
 
     expect(reopened).toBe(true)
-    expect(calls).toHaveLength(1)
-    expect(calls[0].table).toBe('conversations')
-    expect(calls[0].payload).toMatchObject({ status: 'open' })
-    expect(calls[0].payload).toHaveProperty('updated_at')
+    // One update per ownership branch; both target conversations.
+    expect(calls).toHaveLength(2)
+    expect(calls.every((c) => c.table === 'conversations')).toBe(true)
+    const unassignedBranch = calls.find((c) => c.payload?.handoff_state === 'ai_active')
+    expect(unassignedBranch?.payload).toMatchObject({
+      status: 'open',
+      handoff_state: 'ai_active',
+      handoff_reason: 'reopened_by_inbound',
+    })
+    expect(unassignedBranch?.payload).toHaveProperty('updated_at')
   })
 
-  it('guards the write on the row still being closed', async () => {
+  it('hands a closed, assigned conversation back to its person', async () => {
+    const { client, calls } = stubClient({ assigned: true })
+
+    const reopened = await reopenClosedConversation(client, {
+      id: 'conv-1',
+      status: 'closed',
+    })
+
+    expect(reopened).toBe(true)
+    const assignedBranch = calls.find((c) => c.payload?.handoff_state === 'human_active')
+    expect(assignedBranch?.payload).toMatchObject({ status: 'open' })
+    expect(assignedBranch?.filters).toContainEqual(['not:assigned_agent_id:is', null])
+  })
+
+  it('guards every write on the row still being closed', async () => {
     // The caller read the row earlier in the request. Without this filter,
     // two concurrent inbound deliveries both holding a stale
     // `status: 'closed'` could write 'open' over an agent's re-close.
@@ -67,10 +115,10 @@ describe('reopenClosedConversation', () => {
 
     await reopenClosedConversation(client, { id: 'conv-1', status: 'closed' })
 
-    expect(calls[0].filters).toEqual([
-      ['id', 'conv-1'],
-      ['status', 'closed'],
-    ])
+    for (const call of calls) {
+      expect(call.filters).toContainEqual(['id', 'conv-1'])
+      expect(call.filters).toContainEqual(['status', 'closed'])
+    }
   })
 
   it.each(['open', 'pending'])(
@@ -99,7 +147,7 @@ describe('reopenClosedConversation', () => {
     // Throwing here would abort the webhook and make Meta redeliver the
     // message — a worse outcome than a thread that stays closed.
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const { client } = stubClient({ message: 'permission denied' })
+    const { client } = stubClient({ error: { message: 'permission denied' } })
 
     await expect(
       reopenClosedConversation(client, { id: 'conv-1', status: 'closed' }),

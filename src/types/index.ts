@@ -181,13 +181,34 @@ export interface Conversation {
   ai_autoreply_disabled?: boolean;
   ai_reply_count?: number;
   ai_handoff_summary?: string | null;
+  /**
+   * Who owns the thread (migration 040). Written only through
+   * `lib/conversations/handoff.ts`; the three columns above are kept
+   * consistent with it for older readers.
+   */
+  handoff_state?: HandoffState;
+  handoff_reason?: string | null;
+  /** Set while `handoff_state = 'waiting_for_human'`. */
+  waiting_since?: string | null;
 }
 
+export type HandoffState =
+  | 'ai_active'
+  | 'waiting_for_human'
+  | 'human_active'
+  | 'closed';
+
 // ============================================================
-// Notifications (migration 027)
+// Notifications (migration 027, types widened in 040)
 // ============================================================
 
-export type NotificationType = 'conversation_assigned';
+export type NotificationType =
+  | 'conversation_assigned'
+  | 'conversation_waiting'
+  | 'task_assigned'
+  | 'task_due'
+  | 'follow_up_due'
+  | 'review_required';
 
 export interface Notification {
   id: string;

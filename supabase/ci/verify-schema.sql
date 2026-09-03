@@ -42,6 +42,23 @@ BEGIN
     RAISE EXCEPTION 'public.accounts is missing — migration 017 did not apply';
   END IF;
 
+  -- Phase 0 foundations (040): the handoff state every reply path gates
+  -- on, and the per-account settings routing reads.
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'conversations'
+      AND column_name = 'handoff_state'
+  ) THEN
+    RAISE EXCEPTION 'conversations.handoff_state is missing — migration 040 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'accounts'
+      AND column_name = 'timezone'
+  ) THEN
+    RAISE EXCEPTION 'accounts.timezone is missing — migration 040 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

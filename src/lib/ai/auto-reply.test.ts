@@ -46,7 +46,16 @@ vi.mock('./admin-client', () => ({
         }),
         update: (payload: Record<string, unknown>) => {
           h.state.updatePayload = payload
-          return { eq: () => Promise.resolve({ error: null }) }
+          // The handoff transition chains `.eq('id').eq('account_id')`, so
+          // the builder must stay chainable and only resolve when awaited.
+          const chain = {
+            eq: () => chain,
+            is: () => chain,
+            select: () => Promise.resolve({ data: [{ id: 'conv-1' }], error: null }),
+            then: (resolve: (v: { error: null }) => unknown) =>
+              Promise.resolve({ error: null }).then(resolve),
+          }
+          return chain
         },
       }
     },
@@ -86,6 +95,9 @@ beforeEach(() => {
     assigned_agent_id: null,
     ai_autoreply_disabled: false,
     ai_reply_count: 0,
+    // Migration 040: the explicit ownership gate. The legacy columns
+    // above are still read as belt-and-braces.
+    handoff_state: 'ai_active',
   }
   h.state.autoResponders = []
   h.state.claim = true

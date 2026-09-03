@@ -24,15 +24,47 @@ export async function reopenClosedConversation(
   // skipping the round trip keeps inbound processing as cheap as it was.
   if (conversation.status !== 'closed') return false
 
-  const { error } = await db
+  const now = new Date().toISOString()
+
+  // Reopening also decides who owns the thread again (migration 040):
+  // a thread that still has an assignee goes back to that person; an
+  // unassigned one goes back to the assistant. Two guarded UPDATEs
+  // rather than one — Supabase's builder cannot express a CASE — and
+  // exactly one of them can match, so the row is touched once.
+  //
+  // Both keep the `status = 'closed'` guard, re-checked in SQL and not
+  // just in the `if` above: the caller's row was read earlier in the
+  // request, so two concurrent inbound deliveries both holding a stale
+  // `status: 'closed'` must not be able to write 'open' back over an
+  // agent who re-closed the thread in between.
+  const assignedReopen = db
     .from('conversations')
-    .update({ status: 'open', updated_at: new Date().toISOString() })
+    .update({
+      status: 'open',
+      handoff_state: 'human_active',
+      handoff_reason: 'reopened_by_inbound',
+      updated_at: now,
+    })
     .eq('id', conversation.id)
-    // Re-checked in SQL, not just in the `if` above: the caller's row was
-    // read earlier in the request, so two concurrent inbound deliveries
-    // both holding a stale `status: 'closed'` must not be able to write
-    // 'open' back over an agent who re-closed the thread in between.
     .eq('status', 'closed')
+    .not('assigned_agent_id', 'is', null)
+    .select('id')
+
+  const unassignedReopen = db
+    .from('conversations')
+    .update({
+      status: 'open',
+      handoff_state: 'ai_active',
+      handoff_reason: 'reopened_by_inbound',
+      updated_at: now,
+    })
+    .eq('id', conversation.id)
+    .eq('status', 'closed')
+    .is('assigned_agent_id', null)
+    .select('id')
+
+  const [a, b] = await Promise.all([assignedReopen, unassignedReopen])
+  const error = a.error ?? b.error
 
   if (error) {
     // Best-effort, same as the conversation update this follows: a failed
@@ -41,5 +73,5 @@ export async function reopenClosedConversation(
     return false
   }
 
-  return true
+  return (a.data?.length ?? 0) + (b.data?.length ?? 0) > 0
 }

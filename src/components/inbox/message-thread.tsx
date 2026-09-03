@@ -843,15 +843,18 @@ export function MessageThread({
     async (agentId: string | null) => {
       if (!conversation) return;
 
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("conversations")
-        .update({ assigned_agent_id: agentId })
-        .eq("id", conversation.id);
+      // Goes through the server so the handoff state moves with the
+      // assignee (migration 040) instead of a bare column write.
+      const res = await fetch(`/api/conversations/${conversation.id}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assign_to: agentId }),
+      });
 
-      if (error) {
-        console.error("Failed to update assignment:", error);
-        toast.error("Failed to update assignment");
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        console.error("Failed to update assignment:", payload);
+        toast.error(payload.error || "Failed to update assignment");
         return;
       }
 

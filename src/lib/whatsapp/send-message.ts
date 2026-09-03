@@ -36,6 +36,7 @@ import {
 } from '@/lib/whatsapp/interactive';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
+import { transitionHandoff } from '@/lib/conversations/handoff';
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -88,6 +89,14 @@ export interface SendMessageParams {
   /** Structured payload for `messageType === 'interactive'`. */
   interactivePayload?: InteractiveMessagePayload | null;
   replyToMessageId?: string | null;
+  /**
+   * The signed-in teammate sending this message, when there is one.
+   * A human replying is the strongest "I own this thread now" signal:
+   * the assistant stands down and, if nobody has the thread yet, it is
+   * assigned to this person. Integrations sending through the public
+   * API omit it and leave ownership as it was.
+   */
+  actorUserId?: string | null;
 }
 
 export interface SendMessageResult {
@@ -201,6 +210,7 @@ export async function sendMessageToConversation(
     templateMessageParams,
     interactivePayload,
     replyToMessageId,
+    actorUserId,
   } = params;
 
   if (!conversationId) {
@@ -508,6 +518,28 @@ export async function sendMessageToConversation(
       updated_at: new Date().toISOString(),
     })
     .eq('id', conversationId);
+
+  // A teammate replied: the thread is theirs now. The assistant stands
+  // down and, if nobody had the thread, this person takes it — the
+  // "whoever answers first keeps it" rule. Best-effort like the flow
+  // pause below: the message is already delivered and persisted.
+  if (actorUserId) {
+    try {
+      await transitionHandoff(db, {
+        conversationId,
+        accountId,
+        to: 'human_active',
+        reason: 'agent_replied',
+        assignTo: actorUserId,
+        onlyIfUnassigned: true,
+      });
+    } catch (err) {
+      console.error(
+        '[handoff] human_active-on-agent-send failed:',
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
 
   // Pause any active Flow run for this contact — the agent stepping in
   // is the strongest "yield, human is here" signal. Best-effort.

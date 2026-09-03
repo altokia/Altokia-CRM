@@ -40,6 +40,7 @@ import {
   engineSendText,
 } from "./meta-send";
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
+import { transitionHandoff } from "@/lib/conversations/handoff";
 import { addContactTagAndDispatch } from "@/lib/contacts/tag-events";
 import { removeContactTag } from "@/lib/contacts/tag-write";
 import {
@@ -470,16 +471,18 @@ async function executeHandoff(
   node: FlowNodeRow,
 ): Promise<void> {
   const cfg = node.config as { assign_to?: string; note?: string };
-  const convUpdate: Record<string, unknown> = {
-    status: "pending",
-    updated_at: new Date().toISOString(),
-  };
-  if (cfg.assign_to) convUpdate.assigned_agent_id = cfg.assign_to;
   if (run.conversation_id) {
-    await db
-      .from("conversations")
-      .update(convUpdate)
-      .eq("id", run.conversation_id);
+    // Through the single writer of handoff state (migration 040): a
+    // configured assignee takes the thread; otherwise it waits in the
+    // shared queue. Both mute the assistant and keep status = pending.
+    await transitionHandoff(db, {
+      conversationId: run.conversation_id,
+      accountId: run.account_id,
+      to: cfg.assign_to ? "human_active" : "waiting_for_human",
+      reason: "flow_handoff",
+      assignTo: cfg.assign_to,
+      summary: cfg.note ?? undefined,
+    });
   }
   await logEvent(db, run.id, "handoff", node.node_key, {
     note: cfg.note ?? null,
@@ -1070,10 +1073,12 @@ async function handleReplyForActiveRun(
   }
   if (action.type === "handoff") {
     if (run.conversation_id) {
-      await db
-        .from("conversations")
-        .update({ status: "pending", updated_at: new Date().toISOString() })
-        .eq("id", run.conversation_id);
+      await transitionHandoff(db, {
+        conversationId: run.conversation_id,
+        accountId: run.account_id,
+        to: "waiting_for_human",
+        reason: "flow_fallback",
+      });
     }
     await logEvent(db, run.id, "handoff", run.current_node_key, {
       reason: "fallback_exhausted",

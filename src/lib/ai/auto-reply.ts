@@ -5,6 +5,7 @@ import { retrieveKnowledge } from './knowledge'
 import { generateReply } from './generate'
 import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
+import { assistantMayReply, transitionHandoff } from '@/lib/conversations/handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
 import { engineSendText } from '@/lib/flows/meta-send'
@@ -69,10 +70,14 @@ export async function dispatchInboundToAiReply(
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, handoff_state')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
+    // The explicit ownership state (migration 040) is the gate. The two
+    // legacy checks stay as belt-and-braces for rows written by code that
+    // predates it.
+    if (!assistantMayReply(conv.handoff_state)) return
     if (conv.assigned_agent_id) return // a human owns this thread
     if (conv.ai_autoreply_disabled) return // handed off / turned off here
     // Cheap early-out; the authoritative cap check is the atomic claim
@@ -144,16 +149,29 @@ export async function dispatchInboundToAiReply(
         messages,
         replyCount: conv.ai_reply_count ?? 0,
       })
-      const update: Record<string, unknown> = {
-        ai_autoreply_disabled: true,
-        ai_handoff_summary: summary,
-      }
-      // Only set the assignee when a target is configured AND the thread
-      // isn't already owned — never stomp an existing human assignment.
+      // One transition through the single writer of handoff state: a
+      // configured handoff agent takes the thread (human_active); with
+      // none configured it goes to the shared queue (waiting_for_human)
+      // where the work-queue and the shift-start job can see it. Never
+      // stomps an existing human assignment.
       if (config.handoffAgentId && !conv.assigned_agent_id) {
-        update.assigned_agent_id = config.handoffAgentId
+        await transitionHandoff(db, {
+          conversationId,
+          accountId,
+          to: 'human_active',
+          reason: 'ai_requested',
+          assignTo: config.handoffAgentId,
+          summary,
+        })
+      } else {
+        await transitionHandoff(db, {
+          conversationId,
+          accountId,
+          to: 'waiting_for_human',
+          reason: 'ai_requested',
+          summary,
+        })
       }
-      await db.from('conversations').update(update).eq('id', conversationId)
       return
     }
 
