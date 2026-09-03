@@ -488,6 +488,10 @@ export interface PipelineStage {
   position: number;
   color: string;
   created_at: string;
+  /** Migration 043: deals moved here close as won / lost (status derived). */
+  is_won?: boolean;
+  is_lost?: boolean;
+  probability?: number | null;
 }
 
 export type DealStatus = 'open' | 'won' | 'lost';
@@ -510,6 +514,19 @@ export interface Deal {
   notes?: string;
   expected_close_date?: string;
   status?: DealStatus;
+  // Lead fields (migration 043) — filled by the assistant's reading and
+  // editable by people.
+  priority?: TaskPriority;
+  source?: string | null;
+  item_id?: string | null;
+  item_name?: string | null;
+  label_key?: string | null;
+  ai_summary?: Record<string, unknown>;
+  next_action?: string | null;
+  follow_up_at?: string | null;
+  last_interaction_at?: string | null;
+  preferred_contact_time?: string | null;
+  closed_at?: string | null;
   created_at: string;
   updated_at?: string;
   contact?: Contact;

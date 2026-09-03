@@ -33,6 +33,8 @@ import {
   Plus,
   GripVertical,
   AlertTriangle,
+  Trophy,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -116,6 +118,8 @@ export function PipelineSettings({
       name: s.name,
       color: s.color,
       position: i,
+      is_won: s.is_won ?? false,
+      is_lost: s.is_lost ?? false,
     }));
 
     const [renameRes, stagesRes] = await Promise.all([
@@ -250,6 +254,7 @@ export function PipelineSettings({
 
               <div className="grid gap-2">
                 <Label className="text-muted-foreground">{t("stages")}</Label>
+                <p className="text-[11px] text-muted-foreground">{t("closingHint")}</p>
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -272,6 +277,16 @@ export function PipelineSettings({
                           onColorChange={(v) => {
                             const updated = [...localStages];
                             updated[index] = { ...updated[index], color: v };
+                            setLocalStages(updated);
+                          }}
+                          onFlagChange={(flag) => {
+                            // Won and lost are exclusive; toggling one clears the other.
+                            const updated = [...localStages];
+                            const s = updated[index];
+                            updated[index] =
+                              flag === "won"
+                                ? { ...s, is_won: !s.is_won, is_lost: false }
+                                : { ...s, is_lost: !s.is_lost, is_won: false };
                             setLocalStages(updated);
                           }}
                           onRemove={() => handleRemoveStage(stage.id)}
@@ -368,6 +383,7 @@ function SortableStageRow({
   stage,
   onNameChange,
   onColorChange,
+  onFlagChange,
   onRemove,
   colors,
   t,
@@ -375,6 +391,7 @@ function SortableStageRow({
   stage: PipelineStage;
   onNameChange: (v: string) => void;
   onColorChange: (v: string) => void;
+  onFlagChange: (flag: "won" | "lost") => void;
   onRemove: () => void;
   colors: string[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -410,6 +427,28 @@ function SortableStageRow({
         onChange={(e) => onNameChange(e.target.value)}
         className="h-7 flex-1 border-transparent bg-transparent text-sm text-foreground focus:border-border"
       />
+      <button
+        type="button"
+        onClick={() => onFlagChange("won")}
+        title={t("wonStage")}
+        aria-pressed={!!stage.is_won}
+        className={`rounded p-1 transition-colors ${
+          stage.is_won ? "bg-primary/15 text-primary" : "text-muted-foreground/60 hover:text-foreground"
+        }`}
+      >
+        <Trophy className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onFlagChange("lost")}
+        title={t("lostStage")}
+        aria-pressed={!!stage.is_lost}
+        className={`rounded p-1 transition-colors ${
+          stage.is_lost ? "bg-red-500/15 text-red-400" : "text-muted-foreground/60 hover:text-foreground"
+        }`}
+      >
+        <Ban className="h-3.5 w-3.5" />
+      </button>
       <Button
         variant="ghost"
         size="icon-xs"

@@ -37,12 +37,12 @@ import { useTranslations } from "next-intl";
 // not on different copy.
 
 // Spec-defined seed — name and color per the product spec.
-const SPEC_DEFAULT_STAGES = [
+const SPEC_DEFAULT_STAGES: { name: string; color: string; position: number; is_won?: boolean }[] = [
   { name: "New Lead", color: "#3b82f6", position: 0 }, // blue
   { name: "Qualified", color: "#eab308", position: 1 }, // yellow
   { name: "Proposal Sent", color: "#f97316", position: 2 }, // orange
   { name: "Negotiation", color: "#8b5cf6", position: 3 }, // purple
-  { name: "Won", color: "#22c55e", position: 4 }, // green
+  { name: "Won", color: "#22c55e", position: 4, is_won: true }, // green — closes deals (043)
 ];
 
 export default function PipelinesPage() {
@@ -134,6 +134,7 @@ export default function PipelinesPage() {
       name: s.name,
       color: s.color,
       position: s.position,
+      is_won: s.is_won ?? false,
     }));
     await supabase.from("pipeline_stages").insert(stagesPayload);
 
@@ -284,6 +285,7 @@ export default function PipelinesPage() {
       name: s.name,
       color: s.color,
       position: s.position,
+      is_won: s.is_won ?? false,
     }));
     await supabase.from("pipeline_stages").insert(stagesPayload);
 

@@ -25,6 +25,9 @@ vi.mock('./context', () => ({
 }))
 vi.mock('./knowledge', () => ({ retrieveKnowledge: h.retrieveKnowledge }))
 vi.mock('./labels', () => ({ loadLeadLabels: async () => [] }))
+vi.mock('@/lib/leads', () => ({
+  syncLeadFromInsight: async () => ({ dealId: null, created: false }),
+}))
 // The structured turn is what the dispatcher calls now. The mock routes
 // through `h.generateReply` so every existing assertion on "what the
 // model was asked" and "what it answered" keeps working: the text

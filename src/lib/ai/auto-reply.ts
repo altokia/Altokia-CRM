@@ -17,6 +17,7 @@ import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 import { assistantMayReply, transitionHandoff } from '@/lib/conversations/handoff'
 import { createTask } from '@/lib/tasks'
 import { assignTask } from '@/lib/routing'
+import { syncLeadFromInsight } from '@/lib/leads'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface DispatchArgs {
@@ -198,6 +199,24 @@ export async function dispatchInboundToAiReply(
     // The commercial memory: what the assistant understood, kept per
     // conversation (= per contact). Best-effort, never blocks the reply.
     await persistInsight(db, { accountId, conversationId, contactId, structured })
+
+    // The board: open the lead this reading implies, or refresh the one
+    // already there. A human-pinned label (insight lock) is respected by
+    // reading it back from the insight row persistInsight just wrote.
+    const { data: pinned } = await db
+      .from('conversation_insights')
+      .select('lead_label_locked, lead_label_key')
+      .eq('conversation_id', conversationId)
+      .maybeSingle()
+    await syncLeadFromInsight(db, {
+      accountId,
+      contactId,
+      conversationId,
+      structured,
+      ownerUserId: configOwnerUserId,
+      assignedUserId: conv.assigned_agent_id ?? null,
+      labelOverride: pinned?.lead_label_locked ? (pinned.lead_label_key as string | null) : null,
+    })
 
     const summaryText =
       structured.summary ||

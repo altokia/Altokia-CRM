@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { CURRENCIES } from "@/lib/currency";
+import { useLeadLabels } from "@/hooks/use-lead-labels";
 import type {
   Contact,
   Conversation,
@@ -12,6 +13,7 @@ import type {
   DealStatus,
   PipelineStage,
   Profile,
+  TaskPriority,
 } from "@/types";
 import {
   Sheet,
@@ -33,6 +35,30 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+
+const PRIORITIES: TaskPriority[] = ["low", "normal", "high", "urgent"];
+
+/** ISO → value for <input type="datetime-local"> in the browser's zone. */
+function toLocalInput(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function fromLocalInput(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function aiSummaryText(deal: Deal): string | null {
+  const s = deal.ai_summary;
+  if (!s || typeof s !== "object") return null;
+  const text = (s as { text?: unknown }).text;
+  return typeof text === "string" && text.trim() ? text.trim() : null;
+}
 
 interface DealFormProps {
   open: boolean;
@@ -65,6 +91,11 @@ export function DealForm({
   const [assignedTo, setAssignedTo] = useState("");
   const [expectedCloseDate, setExpectedCloseDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>("normal");
+  const [labelKey, setLabelKey] = useState("");
+  const [followUpAt, setFollowUpAt] = useState("");
+  const [nextAction, setNextAction] = useState("");
+  const labels = useLeadLabels();
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -94,6 +125,10 @@ export function DealForm({
       setAssignedTo(deal.assigned_to ?? "");
       setExpectedCloseDate(deal.expected_close_date ?? "");
       setNotes(deal.notes ?? "");
+      setPriority(deal.priority ?? "normal");
+      setLabelKey(deal.label_key ?? "");
+      setFollowUpAt(toLocalInput(deal.follow_up_at));
+      setNextAction(deal.next_action ?? "");
     } else {
       setTitle("");
       setValue("");
@@ -103,6 +138,10 @@ export function DealForm({
       setAssignedTo("");
       setExpectedCloseDate("");
       setNotes("");
+      setPriority("normal");
+      setLabelKey("");
+      setFollowUpAt("");
+      setNextAction("");
     }
   }, [open, deal, defaultStageId, stages, defaultCurrency]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -168,6 +207,10 @@ export function DealForm({
       assigned_to: assignedTo || null,
       notes: notes.trim() || null,
       expected_close_date: expectedCloseDate || null,
+      priority,
+      label_key: labelKey || null,
+      follow_up_at: fromLocalInput(followUpAt),
+      next_action: nextAction.trim() || null,
     };
 
     if (deal) {
@@ -214,9 +257,19 @@ export function DealForm({
   async function handleStatusChange(status: DealStatus) {
     if (!deal) return;
     setStatusAction(status);
+    // Since migration 043 the status follows the stage: move the deal
+    // into the stage flagged won/lost (or back to the first open one)
+    // and let the trigger derive the status. A pipeline with no such
+    // stage falls back to writing the status directly.
+    const target =
+      status === "won"
+        ? stages.find((s) => s.is_won)
+        : status === "lost"
+          ? stages.find((s) => s.is_lost)
+          : stages.find((s) => !s.is_won && !s.is_lost);
     const { error } = await supabase
       .from("deals")
-      .update({ status })
+      .update(target ? { stage_id: target.id, status } : { status })
       .eq("id", deal.id);
     setStatusAction(null);
     if (error) {
@@ -349,6 +402,73 @@ export function DealForm({
                 ))}
               </select>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("priority")}</Label>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                  className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                >
+                  {PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {t(`priorities.${p}`)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("label")}</Label>
+                <select
+                  value={labelKey}
+                  onChange={(e) => setLabelKey(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                >
+                  <option value="">{t("noLabel")}</option>
+                  {labels.map((l) => (
+                    <option key={l.key} value={l.key}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("followUpAt")}</Label>
+                <Input
+                  type="datetime-local"
+                  value={followUpAt}
+                  onChange={(e) => setFollowUpAt(e.target.value)}
+                  className="border-border bg-muted text-foreground"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("nextAction")}</Label>
+                <Input
+                  value={nextAction}
+                  onChange={(e) => setNextAction(e.target.value)}
+                  placeholder={t("nextActionPlaceholder")}
+                  className="border-border bg-muted text-foreground"
+                />
+              </div>
+            </div>
+
+            {deal && aiSummaryText(deal) && (
+              <div className="rounded-lg border border-border bg-muted/50 p-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t("aiSummary")}
+                </p>
+                <p className="mt-1 text-sm text-foreground">{aiSummaryText(deal)}</p>
+                {deal.preferred_contact_time && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("preferredContactTime")}: {deal.preferred_contact_time}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="grid gap-2">
               <Label className="text-muted-foreground">{t("assignedTo")}</Label>

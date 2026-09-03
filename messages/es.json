@@ -305,7 +305,8 @@
         "locked": "Fijada por el equipo",
         "labelSaved": "Etiqueta actualizada",
         "labelError": "No se pudo cambiar la etiqueta"
-      }
+      },
+      "followUp": "Recordatorio"
     },
     "aiBanner": {
       "pausedTitle": "El asistente de IA está en pausa aquí",
@@ -548,7 +549,12 @@
     "card": {
       "noContact": "Sin contacto",
       "won": "Ganada",
-      "lost": "Perdida"
+      "lost": "Perdida",
+      "followUp": "Seguimiento",
+      "priority": {
+        "high": "Alta",
+        "urgent": "Urgente"
+      }
     },
     "form": {
       "editDeal": "Editar oportunidad",
@@ -590,7 +596,21 @@
       "toastMarkedLost": "Marcada como perdida",
       "toastReopened": "Oportunidad reabierta",
       "toastFailedDelete": "No se pudo eliminar la oportunidad",
-      "toastDeleted": "Oportunidad eliminada"
+      "toastDeleted": "Oportunidad eliminada",
+      "priority": "Prioridad",
+      "priorities": {
+        "low": "Baja",
+        "normal": "Normal",
+        "high": "Alta",
+        "urgent": "Urgente"
+      },
+      "label": "Etiqueta",
+      "noLabel": "Sin etiqueta",
+      "followUpAt": "Próximo seguimiento",
+      "nextAction": "Próxima acción",
+      "nextActionPlaceholder": "¿Qué debería pasar ahora?",
+      "aiSummary": "Lo que entendió la IA",
+      "preferredContactTime": "Prefiere contacto"
     },
     "settings": {
       "managePipeline": "Administrar pipeline",
@@ -614,7 +634,10 @@
       "toastMoveOrDeleteDeals": "Primero mueve o elimina las oportunidades de esta etapa",
       "toastFailedDeleteStage": "No se pudo eliminar la etapa",
       "toastFailedDeletePipeline": "No se pudo eliminar el pipeline",
-      "toastDeleted": "Pipeline eliminado"
+      "toastDeleted": "Pipeline eliminado",
+      "wonStage": "Etapa de ganado",
+      "lostStage": "Etapa de perdido",
+      "closingHint": "Marca qué etapas significan ganado o perdido: las oportunidades que lleguen ahí se cierran solas."
     },
     "analytics": {
       "totalDeals": "Total de oportunidades",
@@ -2022,5 +2045,14 @@
       "create": "Crear tarea",
       "cancel": "Cancelar"
     }
+  },
+  "FollowUp": {
+    "title": "Recordatorio",
+    "placeholder": "Ej.: mañana a las 10 llamar a Juan",
+    "button": "Recordar",
+    "created": "Te lo recuerdo el {when}",
+    "noDate": "No entendí cuándo. Prueba: «mañana a las 10», «el lunes», «en 2 horas».",
+    "error": "No se pudo crear el recordatorio",
+    "hint": "Escríbelo con tus palabras; la fecha se lee sola y la tarea aparece en «Mi trabajo»."
   }
 }

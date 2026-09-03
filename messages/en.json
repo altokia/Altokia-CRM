@@ -305,7 +305,8 @@
         "locked": "Set by the team",
         "labelSaved": "Label updated",
         "labelError": "Could not change the label"
-      }
+      },
+      "followUp": "Reminder"
     },
     "aiBanner": {
       "pausedTitle": "AI assistant is paused here",
@@ -548,7 +549,12 @@
     "card": {
       "noContact": "No contact",
       "won": "Won",
-      "lost": "Lost"
+      "lost": "Lost",
+      "followUp": "Follow-up",
+      "priority": {
+        "high": "High",
+        "urgent": "Urgent"
+      }
     },
     "form": {
       "editDeal": "Edit Deal",
@@ -590,7 +596,21 @@
       "toastMarkedLost": "Marked as lost",
       "toastReopened": "Deal reopened",
       "toastFailedDelete": "Failed to delete deal",
-      "toastDeleted": "Deal deleted"
+      "toastDeleted": "Deal deleted",
+      "priority": "Priority",
+      "priorities": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High",
+        "urgent": "Urgent"
+      },
+      "label": "Lead label",
+      "noLabel": "No label",
+      "followUpAt": "Next follow-up",
+      "nextAction": "Next action",
+      "nextActionPlaceholder": "What should happen next?",
+      "aiSummary": "What the assistant understood",
+      "preferredContactTime": "Prefers contact"
     },
     "settings": {
       "managePipeline": "Manage Pipeline",
@@ -614,7 +634,10 @@
       "toastMoveOrDeleteDeals": "Move or delete deals in this stage first",
       "toastFailedDeleteStage": "Failed to delete stage",
       "toastFailedDeletePipeline": "Failed to delete pipeline",
-      "toastDeleted": "Pipeline deleted"
+      "toastDeleted": "Pipeline deleted",
+      "wonStage": "Won stage",
+      "lostStage": "Lost stage",
+      "closingHint": "Mark which stages mean won or lost: deals moved there close automatically."
     },
     "analytics": {
       "totalDeals": "Total Deals",
@@ -2022,5 +2045,14 @@
       "create": "Create task",
       "cancel": "Cancel"
     }
+  },
+  "FollowUp": {
+    "title": "Reminder",
+    "placeholder": "e.g. tomorrow at 10 call Juan",
+    "button": "Remind me",
+    "created": "Reminder set for {when}",
+    "noDate": "No date found. Try: \"tomorrow at 10\", \"on Monday\", \"in 2 hours\".",
+    "error": "Could not create the reminder",
+    "hint": "Type it in your own words; the date is read automatically and the task lands in \"My work\"."
   }
 }

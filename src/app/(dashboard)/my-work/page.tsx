@@ -16,6 +16,7 @@ import { TaskCard } from "@/components/my-work/task-card";
 import { ReassignDialog } from "@/components/my-work/reassign-dialog";
 import { NewTaskDialog } from "@/components/my-work/new-task-dialog";
 import { AvailabilityToggle } from "@/components/my-work/availability-toggle";
+import { FollowUpInput } from "@/components/tasks/follow-up-input";
 import {
   assignTaskTo,
   attendTask,
@@ -42,6 +43,7 @@ type Scope = "mine" | "queue" | "waiting";
  */
 export default function MyWorkPage() {
   const t = useTranslations("MyWork");
+  const tf = useTranslations("FollowUp");
   const format = useFormatter();
   const router = useRouter();
   const { user, accountId } = useAuth();
@@ -204,6 +206,16 @@ export default function MyWorkPage() {
           )}
         </div>
       </div>
+
+      {canAct && (
+        <div className="rounded-lg border border-border bg-card p-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {tf("title")}
+          </p>
+          <FollowUpInput onCreated={load} />
+          <p className="mt-1.5 text-[11px] text-muted-foreground">{tf("hint")}</p>
+        </div>
+      )}
 
       <Tabs value={scope} onValueChange={(v) => setScope(v as Scope)}>
         <TabsList>

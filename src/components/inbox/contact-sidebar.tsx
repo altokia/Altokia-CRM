@@ -15,7 +15,9 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  Bell,
 } from "lucide-react";
+import { FollowUpInput } from "@/components/tasks/follow-up-input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
@@ -255,6 +257,20 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="my-4 border-t border-border" />
+
+          {/* One-line follow-up reminder (phase 3) */}
+          <div>
+            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <Bell className="h-3 w-3" />
+              {tSidebar("followUp")}
+            </div>
+            <div className="mt-2">
+              <FollowUpInput contactId={contact.id} compact />
             </div>
           </div>
 

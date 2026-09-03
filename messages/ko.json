@@ -305,7 +305,8 @@
         "locked": "Set by the team",
         "labelSaved": "Label updated",
         "labelError": "Could not change the label"
-      }
+      },
+      "followUp": "Reminder"
     },
     "aiBanner": {
       "pausedTitle": "이 대화에서 AI 어시스턴트가 일시 중지됨",
@@ -548,7 +549,12 @@
     "card": {
       "noContact": "연락처 없음",
       "won": "성사",
-      "lost": "실패"
+      "lost": "실패",
+      "followUp": "Follow-up",
+      "priority": {
+        "high": "High",
+        "urgent": "Urgent"
+      }
     },
     "form": {
       "editDeal": "딜 수정",
@@ -590,7 +596,21 @@
       "toastMarkedLost": "실패로 표시했습니다",
       "toastReopened": "딜이 재개되었습니다",
       "toastFailedDelete": "딜을 삭제하지 못했습니다",
-      "toastDeleted": "딜이 삭제되었습니다"
+      "toastDeleted": "딜이 삭제되었습니다",
+      "priority": "Priority",
+      "priorities": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High",
+        "urgent": "Urgent"
+      },
+      "label": "Lead label",
+      "noLabel": "No label",
+      "followUpAt": "Next follow-up",
+      "nextAction": "Next action",
+      "nextActionPlaceholder": "What should happen next?",
+      "aiSummary": "What the assistant understood",
+      "preferredContactTime": "Prefers contact"
     },
     "settings": {
       "managePipeline": "파이프라인 관리",
@@ -614,7 +634,10 @@
       "toastMoveOrDeleteDeals": "먼저 이 단계의 딜을 이동하거나 삭제하세요",
       "toastFailedDeleteStage": "단계를 삭제하지 못했습니다",
       "toastFailedDeletePipeline": "파이프라인을 삭제하지 못했습니다",
-      "toastDeleted": "파이프라인이 삭제되었습니다"
+      "toastDeleted": "파이프라인이 삭제되었습니다",
+      "wonStage": "Won stage",
+      "lostStage": "Lost stage",
+      "closingHint": "Mark which stages mean won or lost: deals moved there close automatically."
     },
     "analytics": {
       "totalDeals": "전체 딜",
@@ -2022,5 +2045,14 @@
       "create": "Create task",
       "cancel": "Cancel"
     }
+  },
+  "FollowUp": {
+    "title": "Reminder",
+    "placeholder": "e.g. tomorrow at 10 call Juan",
+    "button": "Remind me",
+    "created": "Reminder set for {when}",
+    "noDate": "No date found. Try: \"tomorrow at 10\", \"on Monday\", \"in 2 hours\".",
+    "error": "Could not create the reminder",
+    "hint": "Type it in your own words; the date is read automatically and the task lands in \"My work\"."
   }
 }

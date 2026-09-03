@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import type { Deal, PipelineStage } from "@/types";
-import { Calendar, Check, X } from "lucide-react";
+import { Bell, Calendar, Check, Flame, X } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useLeadLabels } from "@/hooks/use-lead-labels";
 
 interface DealCardProps {
   deal: Deal;
@@ -28,8 +30,17 @@ function initials(name?: string, fallback?: string) {
 
 export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
+  const format = useFormatter();
+  const labels = useLeadLabels();
+  // Sampled once per mount so the overdue check stays pure during render.
+  const [now] = useState(() => Date.now());
+
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
+  const label = deal.label_key ? labels.find((l) => l.key === deal.label_key) ?? null : null;
+  const hot = deal.priority === "high" || deal.priority === "urgent";
+  const followUp = deal.follow_up_at ? new Date(deal.follow_up_at) : null;
+  const overdue = !!followUp && deal.status === "open" && followUp.getTime() < now;
 
   return (
     <button
@@ -79,6 +90,41 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         </span>
         <span className="truncate text-xs text-muted-foreground">{contactLabel}</span>
       </div>
+
+      {/* Lead reading: label, urgency, next follow-up */}
+      {(label || hot || followUp) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {label && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+              style={{ backgroundColor: `${label.color}20`, color: label.color }}
+            >
+              {label.name}
+            </span>
+          )}
+          {hot && (
+            <span
+              className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                deal.priority === "urgent" ? "bg-red-500/15 text-red-400" : "bg-amber-500/15 text-amber-500"
+              }`}
+            >
+              <Flame className="h-3 w-3" />
+              {t(`priority.${deal.priority}`)}
+            </span>
+          )}
+          {followUp && (
+            <span
+              title={t("followUp")}
+              className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                overdue ? "bg-red-500/15 text-red-400" : "bg-muted text-muted-foreground"
+              }`}
+            >
+              <Bell className="h-3 w-3" />
+              {format.dateTime(followUp, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 flex items-center justify-between">
         <span className="text-sm font-bold text-primary">
