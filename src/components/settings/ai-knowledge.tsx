@@ -14,7 +14,15 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useTranslations } from 'next-intl';
+import { KNOWLEDGE_KINDS, isKnowledgeKind, type KnowledgeKind } from '@/lib/ai/knowledge-kinds';
 
 interface DocSummary {
   id: string;
@@ -39,6 +47,7 @@ export function AiKnowledgeCard({
   const [editing, setEditing] = useState<EditTarget>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [kind, setKind] = useState<KnowledgeKind>('document');
   const [saving, setSaving] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const loadedAccountIdRef = useRef<string | null>(null);
@@ -68,6 +77,7 @@ export function AiKnowledgeCard({
     setEditing('new');
     setTitle('');
     setContent('');
+    setKind('document');
   };
 
   const openEdit = async (id: string) => {
@@ -81,6 +91,7 @@ export function AiKnowledgeCard({
       setEditing(id);
       setTitle(data.title ?? '');
       setContent(data.content ?? '');
+      setKind(isKnowledgeKind(data.kind) ? data.kind : 'document');
     } catch {
       toast.error(t('openFailed'));
     }
@@ -105,7 +116,7 @@ export function AiKnowledgeCard({
         {
           method: isNew ? 'POST' : 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: title.trim(), content: content.trim() }),
+          body: JSON.stringify({ title: title.trim(), content: content.trim(), kind }),
         },
       );
       const data = await res.json();
@@ -230,6 +241,22 @@ export function AiKnowledgeCard({
                     placeholder={t('editDocTitlePlaceholder')}
                     disabled={saving}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('kind')}</Label>
+                  <Select value={kind} onValueChange={(v) => v && setKind(v as KnowledgeKind)} disabled={saving}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {KNOWLEDGE_KINDS.map((k) => (
+                        <SelectItem key={k} value={k}>
+                          {t(`kinds.${k}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">{t('alwaysOnHint')}</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="kb-content">{t('editDocContent')}</Label>

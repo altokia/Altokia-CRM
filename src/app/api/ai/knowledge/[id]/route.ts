@@ -7,6 +7,7 @@ import {
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { loadEmbeddingsKey } from '@/lib/ai/config'
 import { ingestDocument } from '@/lib/ai/knowledge'
+import { isKnowledgeKind } from '@/lib/ai/knowledge-kinds'
 import { AiError } from '@/lib/ai/types'
 
 type Params = { params: Promise<{ id: string }> }
@@ -20,7 +21,7 @@ export async function GET(_request: Request, { params }: Params) {
     const { id } = await params
     const { data, error } = await supabase
       .from('ai_knowledge_documents')
-      .select('id, title, content, updated_at')
+      .select('id, title, content, kind, updated_at')
       .eq('account_id', accountId)
       .eq('id', id)
       .maybeSingle()
@@ -62,6 +63,9 @@ export async function PATCH(request: Request, { params }: Params) {
     const update: Record<string, string> = {}
     if (title !== undefined) update.title = title
     if (content !== undefined) update.content = content
+    // Typed knowledge (042): only a known kind is accepted; anything else
+    // leaves the stored kind alone rather than failing the whole save.
+    if (isKnowledgeKind(body?.kind)) update.kind = body.kind
 
     const { data: updated, error } = await supabase
       .from('ai_knowledge_documents')

@@ -31,6 +31,13 @@ import type { AiProvider } from '@/lib/ai/types';
 import type { AccountMember } from '@/types';
 import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
 import { useTranslations } from 'next-intl';
+import {
+  AiPersonaCard,
+  EMPTY_PERSONA,
+  personaFromApi,
+  personaToApi,
+  type PersonaState,
+} from './ai-persona-card';
 
 const MASKED_KEY = '••••••••••••••••';
 
@@ -69,6 +76,7 @@ export function AiConfig() {
   const [embeddingsKeyEdited, setEmbeddingsKeyEdited] = useState(false);
   const [hasStoredEmbeddingsKey, setHasStoredEmbeddingsKey] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState('');
+  const [persona, setPersona] = useState<PersonaState>(EMPTY_PERSONA);
   const [isActive, setIsActive] = useState(false);
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
   const [maxPerConversation, setMaxPerConversation] = useState(3);
@@ -96,6 +104,7 @@ export function AiConfig() {
         setProvider(data.provider);
         setModel(data.model);
         setSystemPrompt(data.system_prompt ?? '');
+        setPersona(personaFromApi(data.persona));
         setIsActive(data.is_active);
         setAutoReplyEnabled(data.auto_reply_enabled);
         setMaxPerConversation(data.auto_reply_max_per_conversation ?? 3);
@@ -147,6 +156,7 @@ export function AiConfig() {
     api_key: keyPayload(),
     embeddings_api_key: embeddingsKeyPayload(),
     system_prompt: systemPrompt.trim() || null,
+    persona: personaToApi(persona),
     is_active: isActive,
     auto_reply_enabled: autoReplyEnabled,
     auto_reply_max_per_conversation: maxPerConversation,
@@ -380,6 +390,8 @@ export function AiConfig() {
             </div>
           </CardContent>
         </Card>
+
+        <AiPersonaCard value={persona} onChange={setPersona} disabled={disabled} />
 
         <Card>
           <CardHeader>

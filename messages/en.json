@@ -287,7 +287,25 @@
       "deals": "Deals",
       "noTags": "No tags",
       "noDeals": "No deals",
-      "addNotePlaceholder": "Add a note..."
+      "addNotePlaceholder": "Add a note...",
+      "insight": {
+        "title": "AI reading",
+        "label": "Label",
+        "intent": "Intent",
+        "interest": "Interest",
+        "need": "Need",
+        "nextAction": "Next action",
+        "preferredTime": "Prefers contact",
+        "summary": "Summary",
+        "needsHuman": "Needs a person",
+        "updated": "Updated {time}",
+        "empty": "The assistant has not read this conversation yet.",
+        "changeLabel": "Change label",
+        "noLabel": "No label",
+        "locked": "Set by the team",
+        "labelSaved": "Label updated",
+        "labelError": "Could not change the label"
+      }
     },
     "aiBanner": {
       "pausedTitle": "AI assistant is paused here",
@@ -1540,7 +1558,9 @@
       "fields": "Fields & tags",
       "deals": "Deals & currency",
       "members": "Team members",
-      "api": "API keys"
+      "api": "API keys",
+      "catalog": "Catalog",
+      "labels": "Lead labels"
     },
     "groups": {
       "account": "Account",
@@ -1698,7 +1718,39 @@
       "saveSuccess": "AI assistant saved.",
       "saveFailed": "Failed to save.",
       "removeSuccess": "AI configuration removed.",
-      "removeFailed": "Failed to remove."
+      "removeFailed": "Failed to remove.",
+      "persona": {
+        "title": "How the assistant talks",
+        "description": "Set the register and tone without writing technical instructions.",
+        "name": "Assistant name",
+        "namePlaceholder": "e.g. Valeria",
+        "role": "Role",
+        "rolePlaceholder": "e.g. admissions advisor",
+        "language": "Language",
+        "region": "Region",
+        "regionPlaceholder": "e.g. Peru",
+        "formality": "Address",
+        "formalityTu": "Informal (tú)",
+        "formalityUsted": "Formal (usted)",
+        "tone": "Tone",
+        "tonePlaceholder": "e.g. warm and professional",
+        "replyLength": "Reply length",
+        "short": "Short",
+        "medium": "Medium",
+        "long": "Long",
+        "emojis": "Use emojis",
+        "style": "Style",
+        "stylePlaceholder": "e.g. commercial, technical, warm",
+        "objective": "Main objective",
+        "objectivePlaceholder": "e.g. Turn enquiries into sales opportunities",
+        "specialInstructions": "Special instructions",
+        "specialPlaceholder": "Things it must always or never do",
+        "languages": {
+          "es": "Spanish",
+          "en": "English",
+          "pt": "Portuguese"
+        }
+      }
     },
     "aiKnowledge": {
       "loadFailed": "Failed to load knowledge base",
@@ -1725,7 +1777,22 @@
       "addDoc": "Add document",
       "reindex": "Reindex",
       "reindexTooltip": "Re-embed all documents (e.g. after adding an embeddings key)",
-      "loading": "Loading…"
+      "loading": "Loading…",
+      "kind": "Type",
+      "kinds": {
+        "description": "Business description",
+        "faq": "FAQ",
+        "policy": "Policy",
+        "hours": "Opening hours",
+        "location": "Location",
+        "payment": "Payment methods",
+        "warranty": "Warranties",
+        "delivery": "Deliveries & shipping",
+        "requirements": "Requirements",
+        "promotion": "Promotion",
+        "document": "Document"
+      },
+      "alwaysOnHint": "Description, hours, location and payment are included in every reply."
     },
     "advisors": {
       "title": "Schedules & routing",
@@ -1790,6 +1857,78 @@
       },
       "nextShift": "Next shift: {time}",
       "loadLabel": "{count} in progress"
+    },
+    "catalog": {
+      "title": "Products & services catalog",
+      "description": "What the assistant may look up to answer prices and availability without inventing anything.",
+      "newItem": "New item",
+      "edit": "Edit",
+      "archive": "Archive",
+      "restore": "Restore",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "Saved",
+      "saveError": "Could not save",
+      "search": "Search…",
+      "showArchived": "Show archived",
+      "empty": "No items yet. Add the first one so the assistant answers with real data.",
+      "archiveConfirm": "Archive this item? The assistant will stop offering it.",
+      "fields": {
+        "name": "Name",
+        "category": "Category",
+        "description": "Description",
+        "price": "Price",
+        "currency": "Currency",
+        "availability": "Availability",
+        "stock": "Stock (optional)",
+        "features": "Features (one per line)",
+        "attributes": "Attributes"
+      },
+      "availability": {
+        "available": "Available",
+        "limited": "Few left",
+        "unavailable": "Unavailable",
+        "on_request": "On request"
+      },
+      "status": {
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "attributes": {
+        "title": "Business attributes",
+        "description": "Fields specific to your industry (level, modality, bedrooms, district…). They appear on every item and the assistant uses them to answer.",
+        "add": "Add attribute",
+        "key": "Internal key",
+        "label": "Display name",
+        "type": "Type",
+        "options": "Options (comma-separated)",
+        "remove": "Remove",
+        "types": {
+          "text": "Text",
+          "number": "Number",
+          "boolean": "Yes / No",
+          "select": "Option list"
+        },
+        "empty": "No attributes: items only have the basic fields."
+      }
+    },
+    "labels": {
+      "title": "Lead labels",
+      "description": "How the assistant reads each customer. Internal keys never change; names and colours are yours to edit.",
+      "name": "Name",
+      "when": "When it applies (the assistant reads this to decide)",
+      "color": "Colour",
+      "key": "Internal key",
+      "builtin": "Built-in",
+      "newLabel": "New label",
+      "save": "Save",
+      "delete": "Delete",
+      "saved": "Saved",
+      "saveError": "Could not save",
+      "deleteConfirm": "Delete this label?",
+      "builtinHint": "Built-in labels cannot be deleted; rename them if you like.",
+      "moveUp": "Move up",
+      "moveDown": "Move down"
     }
   },
   "MyWork": {

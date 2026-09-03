@@ -7,6 +7,7 @@ import {
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { loadEmbeddingsKey } from '@/lib/ai/config'
 import { ingestDocument } from '@/lib/ai/knowledge'
+import { KNOWLEDGE_KINDS, type KnowledgeKind } from '@/lib/ai/knowledge-kinds'
 import { AiError } from '@/lib/ai/types'
 
 /**
@@ -19,7 +20,7 @@ export async function GET() {
     const { supabase, accountId } = await getCurrentAccount()
     const { data, error } = await supabase
       .from('ai_knowledge_documents')
-      .select('id, title, updated_at')
+      .select('id, title, kind, updated_at')
       .eq('account_id', accountId)
       .order('updated_at', { ascending: false })
     if (error) {
@@ -50,6 +51,10 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     const title = typeof body?.title === 'string' ? body.title.trim() : ''
     const content = typeof body?.content === 'string' ? body.content.trim() : ''
+    // Typed knowledge (migration 042). Unknown/absent → plain document.
+    const kind = KNOWLEDGE_KINDS.includes(body?.kind as KnowledgeKind)
+      ? (body.kind as KnowledgeKind)
+      : 'document'
     if (!title || !content) {
       return NextResponse.json(
         { error: 'title and content are required' },
@@ -59,7 +64,7 @@ export async function POST(request: Request) {
 
     const { data: doc, error } = await supabase
       .from('ai_knowledge_documents')
-      .insert({ account_id: accountId, created_by: userId, title, content })
+      .insert({ account_id: accountId, created_by: userId, title, content, kind })
       .select('id')
       .single()
     if (error || !doc) {

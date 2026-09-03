@@ -30,7 +30,7 @@ export async function GET() {
       // `api_key` is selected only to derive `has_key` — it is stripped
       // out below and never returned to the client.
       .select(
-        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key',
+        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, persona',
       )
       .eq('account_id', accountId)
       .maybeSingle()
@@ -206,6 +206,34 @@ export async function POST(request: Request) {
       is_active: isActive,
       auto_reply_enabled: autoReplyEnabled,
       auto_reply_max_per_conversation: maxPer,
+    }
+    // The no-prompt persona (migration 042). Stored as the snake_case
+    // object the form sends; unknown keys are dropped by normalisation
+    // so the column only ever holds what compilePersona reads. Absent →
+    // left unchanged, like the handoff target.
+    if ('persona' in body) {
+      const p = body.persona && typeof body.persona === 'object' && !Array.isArray(body.persona)
+        ? (body.persona as Record<string, unknown>)
+        : {}
+      const keep = (k: string) => (typeof p[k] === 'string' && (p[k] as string).trim() ? (p[k] as string).trim().slice(0, 400) : undefined)
+      shared.persona = Object.fromEntries(
+        Object.entries({
+          name: keep('name'),
+          role: keep('role'),
+          language: keep('language'),
+          region: keep('region'),
+          formality: p.formality === 'tu' || p.formality === 'usted' ? p.formality : undefined,
+          tone: keep('tone'),
+          reply_length: ['short', 'medium', 'long'].includes(p.reply_length as string) ? p.reply_length : undefined,
+          emojis: typeof p.emojis === 'boolean' ? p.emojis : undefined,
+          style: keep('style'),
+          objective: keep('objective'),
+          special_instructions:
+            typeof p.special_instructions === 'string' && p.special_instructions.trim()
+              ? p.special_instructions.trim().slice(0, 4000)
+              : undefined,
+        }).filter(([, v]) => v !== undefined),
+      )
     }
     // Only touch the handoff target when the form actually sent the field,
     // so a partial save (e.g. flipping a toggle) doesn't wipe it.

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
+import { InsightPanel } from "./insight-panel";
 
 interface ContactSidebarProps {
   contact: Contact | null;
@@ -206,6 +207,12 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               )}
             </div>
           </div>
+
+          {/* Divider */}
+          <div className="my-4 border-t border-border" />
+
+          {/* What the assistant understood (phase 2) */}
+          <InsightPanel contactId={contact.id} />
 
           {/* Divider */}
           <div className="my-4 border-t border-border" />

@@ -287,7 +287,25 @@
       "deals": "Oportunidades",
       "noTags": "Sin etiquetas",
       "noDeals": "Sin oportunidades",
-      "addNotePlaceholder": "Agregar una nota..."
+      "addNotePlaceholder": "Agregar una nota...",
+      "insight": {
+        "title": "Lectura de la IA",
+        "label": "Etiqueta",
+        "intent": "Intención",
+        "interest": "Interés",
+        "need": "Necesidad",
+        "nextAction": "Próxima acción",
+        "preferredTime": "Prefiere contacto",
+        "summary": "Resumen",
+        "needsHuman": "Necesita una persona",
+        "updated": "Actualizado {time}",
+        "empty": "La IA aún no ha leído esta conversación.",
+        "changeLabel": "Cambiar etiqueta",
+        "noLabel": "Sin etiqueta",
+        "locked": "Fijada por el equipo",
+        "labelSaved": "Etiqueta actualizada",
+        "labelError": "No se pudo cambiar la etiqueta"
+      }
     },
     "aiBanner": {
       "pausedTitle": "El asistente de IA está en pausa aquí",
@@ -1540,7 +1558,9 @@
       "fields": "Campos y etiquetas",
       "deals": "Oportunidades y moneda",
       "members": "Miembros del equipo",
-      "api": "Claves API"
+      "api": "Claves API",
+      "catalog": "Catálogo",
+      "labels": "Etiquetas de lead"
     },
     "groups": {
       "account": "Cuenta",
@@ -1698,7 +1718,39 @@
       "saveSuccess": "Asistente de IA guardado.",
       "saveFailed": "No se pudo guardar.",
       "removeSuccess": "Configuración de IA eliminada.",
-      "removeFailed": "No se pudo eliminar."
+      "removeFailed": "No se pudo eliminar.",
+      "persona": {
+        "title": "Cómo habla el asistente",
+        "description": "Configura el trato y el tono sin escribir instrucciones técnicas.",
+        "name": "Nombre del asistente",
+        "namePlaceholder": "p. ej. Valeria",
+        "role": "Rol",
+        "rolePlaceholder": "p. ej. asesora de admisiones",
+        "language": "Idioma",
+        "region": "Región",
+        "regionPlaceholder": "p. ej. Perú",
+        "formality": "Trato",
+        "formalityTu": "Tú (cercano)",
+        "formalityUsted": "Usted (formal)",
+        "tone": "Tono",
+        "tonePlaceholder": "p. ej. cercano y profesional",
+        "replyLength": "Largo de las respuestas",
+        "short": "Cortas",
+        "medium": "Medias",
+        "long": "Largas",
+        "emojis": "Usar emojis",
+        "style": "Estilo",
+        "stylePlaceholder": "p. ej. comercial, técnico, cálido",
+        "objective": "Objetivo principal",
+        "objectivePlaceholder": "p. ej. Convertir consultas en oportunidades comerciales",
+        "specialInstructions": "Instrucciones especiales",
+        "specialPlaceholder": "Cosas que siempre debe hacer o nunca debe hacer",
+        "languages": {
+          "es": "Español",
+          "en": "Inglés",
+          "pt": "Portugués"
+        }
+      }
     },
     "aiKnowledge": {
       "loadFailed": "No se pudo cargar la base de conocimiento",
@@ -1725,7 +1777,22 @@
       "addDoc": "Agregar documento",
       "reindex": "Reindexar",
       "reindexTooltip": "Volver a generar los embeddings de todos los documentos (p. ej. después de agregar una clave de embeddings)",
-      "loading": "Cargando…"
+      "loading": "Cargando…",
+      "kind": "Tipo",
+      "kinds": {
+        "description": "Descripción del negocio",
+        "faq": "Pregunta frecuente",
+        "policy": "Política",
+        "hours": "Horarios",
+        "location": "Ubicación",
+        "payment": "Métodos de pago",
+        "warranty": "Garantías",
+        "delivery": "Entregas y envíos",
+        "requirements": "Requisitos",
+        "promotion": "Promoción",
+        "document": "Documento"
+      },
+      "alwaysOnHint": "Descripción, horarios, ubicación y pagos se incluyen en todas las respuestas."
     },
     "advisors": {
       "title": "Horarios y asignación",
@@ -1790,6 +1857,78 @@
       },
       "nextShift": "Próximo turno: {time}",
       "loadLabel": "{count} en curso"
+    },
+    "catalog": {
+      "title": "Catálogo de productos y servicios",
+      "description": "Lo que la IA puede consultar para responder precios y disponibilidad sin inventar nada.",
+      "newItem": "Nuevo ítem",
+      "edit": "Editar",
+      "archive": "Archivar",
+      "restore": "Restaurar",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "saved": "Guardado",
+      "saveError": "No se pudo guardar",
+      "search": "Buscar…",
+      "showArchived": "Mostrar archivados",
+      "empty": "Aún no hay ítems. Agrega el primero para que la IA responda con datos reales.",
+      "archiveConfirm": "¿Archivar este ítem? La IA dejará de ofrecerlo.",
+      "fields": {
+        "name": "Nombre",
+        "category": "Categoría",
+        "description": "Descripción",
+        "price": "Precio",
+        "currency": "Moneda",
+        "availability": "Disponibilidad",
+        "stock": "Stock (opcional)",
+        "features": "Características (una por línea)",
+        "attributes": "Atributos"
+      },
+      "availability": {
+        "available": "Disponible",
+        "limited": "Pocos cupos / unidades",
+        "unavailable": "No disponible",
+        "on_request": "A pedido / consultar"
+      },
+      "status": {
+        "active": "Activo",
+        "archived": "Archivado"
+      },
+      "attributes": {
+        "title": "Atributos del negocio",
+        "description": "Campos propios de tu rubro (nivel, modalidad, dormitorios, distrito…). Aparecen en cada ítem y la IA los usa para responder.",
+        "add": "Agregar atributo",
+        "key": "Clave interna",
+        "label": "Nombre visible",
+        "type": "Tipo",
+        "options": "Opciones (separadas por comas)",
+        "remove": "Quitar",
+        "types": {
+          "text": "Texto",
+          "number": "Número",
+          "boolean": "Sí / No",
+          "select": "Lista de opciones"
+        },
+        "empty": "Sin atributos: los ítems solo tendrán los campos básicos."
+      }
+    },
+    "labels": {
+      "title": "Etiquetas de lead",
+      "description": "Cómo lee la IA a cada cliente. Las claves internas no cambian; los nombres y colores sí, a tu gusto.",
+      "name": "Nombre",
+      "when": "Cuándo aplica (la IA lo lee para decidir)",
+      "color": "Color",
+      "key": "Clave interna",
+      "builtin": "Integrada",
+      "newLabel": "Nueva etiqueta",
+      "save": "Guardar",
+      "delete": "Eliminar",
+      "saved": "Guardado",
+      "saveError": "No se pudo guardar",
+      "deleteConfirm": "¿Eliminar esta etiqueta?",
+      "builtinHint": "Las integradas no se eliminan; renómbralas si quieres.",
+      "moveUp": "Subir",
+      "moveDown": "Bajar"
     }
   },
   "MyWork": {

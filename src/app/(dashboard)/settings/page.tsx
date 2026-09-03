@@ -18,6 +18,8 @@ import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel'
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
+import { CatalogManager } from '@/components/settings/catalog-manager';
+import { LabelsManager } from '@/components/settings/labels-manager';
 import {
   resolveSection,
   type SettingsSection,
@@ -75,6 +77,8 @@ function SettingsPageInner() {
     security: <SecurityPanel />,
     appearance: <AppearancePanel />,
     whatsapp: <WhatsAppConfig />,
+    catalog: <CatalogManager />,
+    labels: <LabelsManager />,
     templates: <TemplateManager />,
     'quick-replies': <QuickRepliesManager />,
     fields: <FieldsAndTagsPanel />,
