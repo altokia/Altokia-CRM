@@ -73,6 +73,7 @@ import {
   PresenceDot,
 } from '@/components/presence/presence-dot';
 import { InviteMemberDialog } from './invite-member-dialog';
+import { AdvisorEditor } from './advisor-editor';
 import { SettingsPanelHead } from './settings-panel-head';
 import { ROLE_META } from './role-meta';
 
@@ -559,6 +560,10 @@ export function MembersTab() {
           )}
         </div>
       </RequireRole>
+
+      {/* Schedules, specialties, capacity and the routing policy —
+          the facts routing decides from (migration 041). */}
+      <AdvisorEditor />
 
       <InviteMemberDialog
         open={inviteOpen}
