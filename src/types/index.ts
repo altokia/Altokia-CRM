@@ -199,6 +199,111 @@ export type HandoffState =
   | 'closed';
 
 // ============================================================
+// Advisors, schedules, tasks (migration 041)
+// ============================================================
+
+export type AvailabilityOverride = 'available' | 'busy' | 'off';
+
+export interface AdvisorProfile {
+  user_id: string;
+  account_id: string;
+  department: string | null;
+  specialties: string[];
+  item_ids: string[];
+  capacity: number;
+  availability_override: AvailabilityOverride | null;
+  accepts_assignments: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdvisorSchedule {
+  id: string;
+  account_id: string;
+  user_id: string;
+  /** 0 = Sunday … 6 = Saturday. */
+  weekday: number;
+  /** 'HH:mm:ss' as Postgres returns TIME; the UI shows 'HH:mm'. */
+  start_time: string;
+  end_time: string;
+  created_at: string;
+}
+
+/**
+ * Built-in action types. The column is free text validated in
+ * lib/tasks, so a business can add its own (e.g. 'SITE_VISIT') as a
+ * constant — not a migration.
+ */
+export const TASK_ACTION_TYPES = [
+  'HUMAN_CHAT',
+  'CALL',
+  'FOLLOW_UP',
+  'APPOINTMENT',
+  'QUOTE',
+  'REVIEW_REQUIRED',
+  'AI_CONTINUE',
+] as const;
+export type TaskActionType = (typeof TASK_ACTION_TYPES)[number] | (string & {});
+
+export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type TaskStatus = 'pending' | 'assigned' | 'in_progress' | 'done' | 'cancelled';
+export type TaskSource = 'manual' | 'ai' | 'automation' | 'flow' | 'system';
+
+export interface TaskRoutingHints {
+  department?: string;
+  specialties?: string[];
+  item_id?: string;
+  previous_advisor_id?: string;
+}
+
+export interface Task {
+  id: string;
+  account_id: string;
+  conversation_id: string | null;
+  contact_id: string | null;
+  deal_id: string | null;
+  action_type: TaskActionType;
+  title: string;
+  details: string | null;
+  priority: TaskPriority;
+  status: TaskStatus;
+  assigned_to: string | null;
+  created_by: string | null;
+  source: TaskSource;
+  due_at: string | null;
+  preferred_window: { after?: string; before?: string } | null;
+  routing: TaskRoutingHints;
+  summary: Record<string, unknown>;
+  assigned_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  due_notified_at: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Joined for the queue card. */
+  contact?: Pick<Contact, 'id' | 'name' | 'phone' | 'company'> | null;
+}
+
+export type RoutingStrategy =
+  | 'manual'
+  | 'round_robin'
+  | 'least_load'
+  | 'by_schedule'
+  | 'by_department'
+  | 'by_specialty'
+  | 'by_item'
+  | 'previous_advisor'
+  | 'priority';
+
+export interface AccountRouting {
+  strategy?: RoutingStrategy;
+  /** What to do when nobody is available: keep in queue, or let the AI keep collecting info. */
+  fallback?: 'queue' | 'ai_continue';
+  /** Round-robin cursor. */
+  last_assigned_user_id?: string;
+}
+
+// ============================================================
 // Notifications (migration 027, types widened in 040)
 // ============================================================
 

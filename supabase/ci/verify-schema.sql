@@ -59,6 +59,11 @@ BEGIN
     RAISE EXCEPTION 'accounts.timezone is missing — migration 040 did not apply';
   END IF;
 
+  -- Phase 1 (041): the work queue and advisor schedules.
+  IF to_regclass('public.tasks') IS NULL OR to_regclass('public.advisor_schedules') IS NULL THEN
+    RAISE EXCEPTION 'tasks / advisor_schedules are missing — migration 041 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

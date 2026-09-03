@@ -38,7 +38,8 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configuración",
-    "menuSignOut": "Cerrar sesión"
+    "menuSignOut": "Cerrar sesión",
+    "myWork": "Mi trabajo"
   },
   "Header": {
     "dashboard": "Panel",
@@ -1725,6 +1726,162 @@
       "reindex": "Reindexar",
       "reindexTooltip": "Volver a generar los embeddings de todos los documentos (p. ej. después de agregar una clave de embeddings)",
       "loading": "Cargando…"
+    },
+    "advisors": {
+      "title": "Horarios y asignación",
+      "description": "Turnos individuales, especialidades y cómo se reparten las conversaciones.",
+      "editProfile": "Editar perfil de asesor",
+      "department": "Departamento",
+      "departmentPlaceholder": "p. ej. Matrículas, Ventas, Soporte",
+      "specialties": "Especialidades",
+      "specialtiesHint": "Separadas por comas, p. ej. niños, empresas",
+      "capacity": "Capacidad (conversaciones a la vez)",
+      "acceptsAssignments": "Recibe asignaciones automáticas",
+      "override": "Estado manual",
+      "overrideAuto": "Según horario",
+      "schedule": "Horario semanal",
+      "addWindow": "Agregar franja",
+      "removeWindow": "Quitar",
+      "from": "Desde",
+      "to": "Hasta",
+      "noSchedule": "Sin horario: se considera disponible en cualquier momento (mientras esté en línea).",
+      "weekdays": {
+        "0": "Domingo",
+        "1": "Lunes",
+        "2": "Martes",
+        "3": "Miércoles",
+        "4": "Jueves",
+        "5": "Viernes",
+        "6": "Sábado"
+      },
+      "save": "Guardar",
+      "saved": "Guardado",
+      "saveError": "No se pudo guardar",
+      "invalidWindow": "La hora de inicio debe ser anterior a la de fin",
+      "routing": {
+        "title": "Reparto de conversaciones",
+        "strategy": "Estrategia",
+        "fallback": "Si nadie está disponible",
+        "timezone": "Zona horaria del negocio",
+        "strategies": {
+          "manual": "Manual",
+          "round_robin": "Por turnos (round-robin)",
+          "least_load": "Menor carga",
+          "by_schedule": "Según horario y carga",
+          "by_department": "Por departamento",
+          "by_specialty": "Por especialidad",
+          "by_item": "Por producto o servicio",
+          "previous_advisor": "Asesor anterior",
+          "priority": "Por prioridad"
+        },
+        "fallbacks": {
+          "queue": "Dejar en cola hasta el siguiente turno",
+          "ai_continue": "La IA sigue atendiendo y recopila datos"
+        }
+      },
+      "statusNow": {
+        "available": "Disponible",
+        "off_shift": "Fuera de turno",
+        "offline": "Sin conexión",
+        "at_capacity": "Sin capacidad",
+        "override_busy": "Ocupado",
+        "override_off": "No disponible",
+        "not_accepting": "No recibe asignaciones"
+      },
+      "nextShift": "Próximo turno: {time}",
+      "loadLabel": "{count} en curso"
+    }
+  },
+  "MyWork": {
+    "title": "Mi trabajo",
+    "description": "Lo que te toca atender, ordenado por prioridad y antigüedad.",
+    "tabs": {
+      "mine": "Mis pendientes",
+      "queue": "Sin asignar",
+      "waiting": "Esperando asesor"
+    },
+    "empty": {
+      "mine": "No tienes tareas pendientes.",
+      "queue": "No hay trabajo sin asignar.",
+      "waiting": "Ninguna conversación está esperando."
+    },
+    "actions": {
+      "attend": "Atender",
+      "viewConversation": "Ver conversación",
+      "reassign": "Reasignar",
+      "done": "Marcar como hecha",
+      "cancel": "Cancelar tarea",
+      "newTask": "Nueva tarea",
+      "start": "Empezar"
+    },
+    "reassign": {
+      "title": "Reasignar a",
+      "auto": "Elegir automáticamente",
+      "unassign": "Dejar sin asignar"
+    },
+    "priority": {
+      "urgent": "Urgente",
+      "high": "Alta",
+      "normal": "Normal",
+      "low": "Baja"
+    },
+    "actionType": {
+      "HUMAN_CHAT": "Conversación",
+      "CALL": "Llamada",
+      "FOLLOW_UP": "Seguimiento",
+      "APPOINTMENT": "Cita",
+      "QUOTE": "Cotización",
+      "REVIEW_REQUIRED": "Revisión",
+      "AI_CONTINUE": "Sigue la IA",
+      "OTHER": "Tarea"
+    },
+    "card": {
+      "waitingSince": "Esperando desde {time}",
+      "due": "Vence {time}",
+      "overdue": "Vencida {time}",
+      "preferredWindow": "Prefiere contacto {window}",
+      "assignedTo": "Asignada a {name}",
+      "unassigned": "Sin asignar",
+      "createdBy": {
+        "ai": "Creada por la IA",
+        "automation": "Creada por una automatización",
+        "flow": "Creada por un flujo",
+        "manual": "Creada manualmente",
+        "system": "Creada por el sistema"
+      }
+    },
+    "nextAvailable": "Un asesor estará disponible desde {time}",
+    "availability": {
+      "title": "Mi disponibilidad",
+      "auto": "Según mi horario",
+      "available": "Disponible",
+      "busy": "Ocupado",
+      "off": "No disponible"
+    },
+    "toast": {
+      "attended": "Conversación tomada",
+      "reassigned": "Tarea reasignada",
+      "queued": "Nadie disponible ahora; queda en cola.",
+      "done": "Tarea completada",
+      "created": "Tarea creada",
+      "error": "No se pudo completar la acción"
+    },
+    "newTask": {
+      "title": "Nueva tarea",
+      "titleLabel": "Título",
+      "titlePlaceholder": "p. ej. Llamar a Juan por la matrícula",
+      "typeLabel": "Tipo",
+      "priorityLabel": "Prioridad",
+      "dueLabel": "Vence",
+      "detailsLabel": "Detalles",
+      "detailsPlaceholder": "Contexto útil para quien la atienda",
+      "contactLabel": "Contacto (opcional)",
+      "contactPlaceholder": "Buscar contacto…",
+      "assignLabel": "Asignar a",
+      "assignAuto": "Elegir automáticamente",
+      "assignMe": "A mí",
+      "create": "Crear tarea",
+      "cancel": "Cancelar"
     }
   }
 }
