@@ -2339,6 +2339,7 @@
   "Platform": {
     "title": "Consola Altokia",
     "subtitle": "Los negocios que usan la plataforma.",
+    "consoleSubtitle": "Consola de operación",
     "nav": {
       "clients": "Clientes",
       "audit": "Actividad",
@@ -2485,6 +2486,10 @@
       "generic": "Algo salió mal",
       "notOperator": "No tienes acceso a esta consola.",
       "weakPassword": "La contraseña debe tener al menos 10 caracteres."
+    },
+    "theme": {
+      "toDark": "Modo oscuro",
+      "toLight": "Modo claro"
     },
     "plan": {
       "title": "Plan",

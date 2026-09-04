@@ -1,106 +1,122 @@
 // ============================================================
-// Altokia's palette, mapped onto the product's tokens.
+// The Altokia surface — how the brand palette drives the product's
+// own semantic tokens inside the operator console.
 //
-// Two screens belong to Altokia rather than to the client: the
-// console at /platform and the sign-in screen. Both need the same
-// treatment — pin the brand ground and the violet accent, ignoring
-// whatever mode and accent the visitor picked for their CRM — so the
-// mapping lives here once instead of drifting apart in two files.
+// The console and the customer's CRM are two products that happen to
+// share a component library. The components read `--background`,
+// `--card`, `--primary` and friends; this file re-points that whole
+// set at the Altokia palette for the console's subtree, so not a
+// single component had to learn about the brand.
 //
-// Everything derives from the six raw hexes in globals.css via
-// color-mix(), so changing a hex there restyles both surfaces and
-// nothing else. Nothing in this file hardcodes a color.
-//
-// Two mechanisms apply it, on purpose:
-//
-//   1. `ALTOKIA_SURFACE_STYLE` — inline custom properties on the
-//      surface's root element, covering everything inside it.
-//   2. `altokiaSurfaceCss()` — a rule keyed off the same
-//      `data-plane` attribute, covering what escapes that subtree.
-//      Base UI portals dialogs and select popups onto document.body,
-//      and a client-accented dialog floating over the Altokia console
-//      would undo the whole point.
+// Two mechanisms, because one is not enough:
+//   1. `ALTOKIA_SURFACE_STYLE` — inline vars on the surface root,
+//      covering everything rendered inside it.
+//   2. `altokiaSurfaceCss()` — a rule keyed off the same `data-plane`
+//      attribute, covering what escapes that subtree. Base UI portals
+//      dialogs and select popups onto document.body, and a
+//      client-accented dialog floating over the Altokia console would
+//      undo the whole point.
 //
 // The rule sits at the same specificity as globals.css's
 // `html[data-mode="…"]` block but appears later in the document (an
 // inline <style> in the body, vs. a <link> in the head), so it wins.
 // If a browser lacks :has(), mechanism 1 still holds the page itself.
 //
-// CONTRAST. This palette is built for a dark ground and the raw
-// values are not interchangeable. Violet on ink is 3.9:1 — fine as a
-// button fill under white text (5.2:1), too low for small text, so
-// text-weight violet goes through --altokia-violet-lift (8:1).
-// Magenta is an accent only: marks, borders, the gradient rule.
+// LIGHT AND DARK BOTH WORK, and for free. Every value below points at
+// a `--altokia-*` token, and those already swap with `data-mode` in
+// globals.css. So this mapping is written once, mode-agnostically:
+// what changes underneath is the palette, not the wiring. An earlier
+// version hard-coded a dark ground and broke the moment the light
+// palette landed.
+//
+// CONTRAST. The raw brand values are not interchangeable with their
+// text variants. Violet as a fill under white text is fine; violet as
+// 14px text is not, so text-weight violet goes through
+// `--altokia-violet-text`, which globals.css mixes per mode. Magenta
+// is an accent only: marks, borders, the gradient rule.
 // ============================================================
 
 import type { CSSProperties } from 'react';
 
-/** Neutral steps, mixed off the two brand grounds. */
-const lift = (percent: number) =>
-  `color-mix(in oklab, var(--altokia-surface) ${percent}%, var(--altokia-white))`;
-const dim = (percent: number) =>
-  `color-mix(in oklab, var(--altokia-white) ${percent}%, var(--altokia-ink))`;
+/** A step between two ground tokens — the neutral ladder. */
+const mix = (a: string, b: string, percent: number) =>
+  `color-mix(in oklab, ${a} ${percent}%, ${b})`;
+
 const violetAlpha = (percent: number) =>
   `color-mix(in oklab, var(--altokia-violet) ${percent}%, transparent)`;
-/** Hairlines read off the ink, not the surface, so they hold on both. */
-const hairline = `color-mix(in oklab, var(--altokia-ink) 78%, var(--altokia-white))`;
 
 const ALTOKIA_SURFACE_TOKENS: Record<string, string> = {
-  // Inverted against the CRM on purpose. The customer's dark theme has
-  // a LIGHTER sidebar on a darker canvas; the console has the true ink
-  // in the rail and a lifted canvas beside it. That one relationship,
-  // read before any text is, is what tells an operator which of the two
-  // products they are looking at — the reason for branding the console
-  // at all. Sharing one value between background and sidebar, as this
-  // did first, left the two panes separated by a hairline and nothing
-  // else.
-  '--background': 'var(--altokia-surface)',
-  '--foreground': 'var(--altokia-white)',
-  '--card': lift(92),
-  '--card-2': lift(86),
-  '--card-foreground': 'var(--altokia-white)',
+  // ---- grounds ------------------------------------------------
+  '--background': 'var(--altokia-bg)',
+  '--foreground': 'var(--altokia-text)',
+  '--card': 'var(--altokia-surface)',
+  '--card-2': 'var(--altokia-surface-2)',
+  '--card-foreground': 'var(--altokia-text)',
   '--popover': 'var(--altokia-surface)',
-  '--popover-foreground': 'var(--altokia-white)',
-  '--secondary': lift(90),
-  '--secondary-foreground': 'var(--altokia-white)',
-  '--muted': lift(90),
-  '--muted-foreground': dim(62),
-  '--accent': lift(86),
-  '--accent-foreground': 'var(--altokia-white)',
-  // Danger stays red. It is a signal, not a brand color, and the one
-  // place an operator must not have to decode a palette.
-  '--destructive': 'oklch(0.68 0.19 25)',
-  '--border': hairline,
-  '--input': hairline,
-  '--radius': '0.5rem',
+  '--popover-foreground': 'var(--altokia-text)',
+  '--secondary': 'var(--altokia-surface-2)',
+  '--secondary-foreground': 'var(--altokia-text)',
+  '--muted': 'var(--altokia-surface-2)',
+  '--muted-foreground': 'var(--altokia-text-soft)',
+  '--accent': 'var(--altokia-surface-2)',
+  '--accent-foreground': 'var(--altokia-text)',
+  '--border': 'var(--altokia-border)',
+  '--input': 'var(--altokia-border)',
+
+  // ---- brand --------------------------------------------------
   '--primary': 'var(--altokia-violet)',
   '--primary-foreground': 'var(--altokia-white)',
-  // Darker on hover, not lighter: white on the lightened violet measured
-  // 3.36:1, so a primary button's own label failed the moment the
-  // pointer touched it.
-  '--primary-hover': 'color-mix(in oklab, var(--altokia-violet) 86%, black)',
-  '--primary-soft': violetAlpha(16),
+  '--primary-hover': 'var(--altokia-violet-hover)',
+  '--primary-soft': 'var(--altokia-tint)',
   '--primary-soft-2': violetAlpha(28),
-  // The focus ring has to be *seen*, so it takes the lifted violet
-  // rather than the fill violet.
-  '--ring': 'var(--altokia-violet-lift)',
+  // The focus ring has to be *seen* on both grounds, so it takes the
+  // text-weight violet rather than the fill.
+  '--ring': 'var(--altokia-violet-text)',
+
+  // ---- signals ------------------------------------------------
+  // Danger keeps the brand's own red. It is a signal, not decoration,
+  // and the one place an operator must not have to decode a palette.
+  '--destructive': 'var(--altokia-danger)',
+  '--destructive-foreground': 'var(--altokia-white)',
+
+  // ---- charts -------------------------------------------------
+  // Brand first, then the neutral ladder, so a chart never reaches for
+  // a colour that means something else somewhere on the same screen.
   '--chart-1': 'var(--altokia-violet)',
   '--chart-2': 'var(--altokia-cyan)',
   '--chart-3': 'var(--altokia-magenta)',
-  '--chart-4': dim(46),
-  '--chart-5': dim(30),
-  '--sidebar': 'var(--altokia-ink)',
-  '--sidebar-accent-2': 'var(--altokia-surface)',
-  '--sidebar-foreground': 'var(--altokia-white)',
-  '--sidebar-accent': lift(88),
-  '--sidebar-accent-foreground': 'var(--altokia-white)',
-  '--sidebar-border': hairline,
+  '--chart-4': mix('var(--altokia-text-soft)', 'var(--altokia-bg)', 70),
+  '--chart-5': mix('var(--altokia-text-soft)', 'var(--altokia-bg)', 40),
+
+  // ---- the rail -----------------------------------------------
+  // `--altokia-rail` is defined per mode in globals.css and this is why
+  // it exists as its own token: in light it lifts to white against the
+  // grey canvas, in dark it sits level with the canvas and is separated
+  // by the hairline alone. Both come straight off the mockups, and the
+  // two behaviours cannot be expressed by pointing at one ground.
+  '--sidebar': 'var(--altokia-rail)',
+  '--sidebar-foreground': 'var(--altokia-text)',
+  '--sidebar-accent': 'var(--altokia-surface-2)',
+  '--sidebar-accent-foreground': 'var(--altokia-text)',
+  '--sidebar-border': 'var(--altokia-border)',
   '--sidebar-primary': 'var(--altokia-violet)',
   '--sidebar-primary-foreground': 'var(--altokia-white)',
-  '--sidebar-ring': 'var(--altokia-violet-lift)',
+  '--sidebar-ring': 'var(--altokia-violet-text)',
+
+  // ---- shape and type -----------------------------------------
+  // 11px is the design system's middle radius: buttons, inputs, nav
+  // items. The other four are available as --altokia-radius-* for the
+  // places that want them.
+  '--radius': 'var(--altokia-radius-md)',
+  // Plus Jakarta Sans for the interface, JetBrains Mono for data.
+  // Re-pointing the product's own font vars means every existing
+  // component picks them up without a class change — and it stops at
+  // this subtree, so the customer's CRM keeps Inter.
+  '--font-sans': 'var(--font-altokia-ui)',
+  '--font-heading': 'var(--font-altokia-display)',
+  '--font-mono': 'var(--font-altokia-mono)',
 };
 
-/** Ready to spread onto a surface root's `style`. */
 export const ALTOKIA_SURFACE_STYLE = ALTOKIA_SURFACE_TOKENS as CSSProperties;
 
 /**

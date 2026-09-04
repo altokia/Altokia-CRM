@@ -48,18 +48,65 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-soft-2: var(--primary-soft-2);
-  /* Altokia's own brand colors, exposed as utilities
-   * (bg-altokia-ink, text-altokia-cyan, border-altokia-violet…).
-   * These are NOT product tokens: see the BRAND block below for why
-   * they are a separate set. */
-  --color-altokia-ink: var(--altokia-ink);
+  /* ---- Altokia: type ----
+   * The three families loaded in app/layout.tsx, as utilities:
+   * font-altokia-display (Sora), font-altokia-ui (Plus Jakarta Sans),
+   * font-altokia-mono (JetBrains Mono).
+   *
+   * The self-reference is the `inline` idiom used throughout this
+   * block: `inline` means Tailwind pastes the VALUE into the utility
+   * rather than emitting the variable here, so `font-altokia-ui`
+   * compiles to `font-family: var(--font-altokia-ui)` and resolves
+   * against the next/font class on <html>. Nothing circular. */
+  --font-altokia-display: var(--font-altokia-display);
+  --font-altokia-ui: var(--font-altokia-ui);
+  --font-altokia-mono: var(--font-altokia-mono);
+  /* ---- Altokia: color ----
+   * Exposed as utilities (bg-altokia-surface, text-altokia-cyan,
+   * border-altokia-border…). These are NOT product tokens: see the
+   * BRAND block below for why they are a separate set.
+   *
+   * Neutrals and the *-text variants follow data-mode; the three
+   * brand hues and the three semantics do not. */
+  --color-altokia-bg: var(--altokia-bg);
+  --color-altokia-rail: var(--altokia-rail);
   --color-altokia-surface: var(--altokia-surface);
+  --color-altokia-surface-2: var(--altokia-surface-2);
+  --color-altokia-border: var(--altokia-border);
+  --color-altokia-text: var(--altokia-text);
+  --color-altokia-text-soft: var(--altokia-text-soft);
   --color-altokia-cyan: var(--altokia-cyan);
   --color-altokia-violet: var(--altokia-violet);
   --color-altokia-magenta: var(--altokia-magenta);
   --color-altokia-white: var(--altokia-white);
-  /* The violet that is legible as text on the ink ground; the raw one
-   * is a fill color. See the BRAND block. */
+  --color-altokia-tint: var(--altokia-tint);
+  --color-altokia-success: var(--altokia-success);
+  --color-altokia-warning: var(--altokia-warning);
+  --color-altokia-danger: var(--altokia-danger);
+  /* Text-weight variants. The raw hues above are FILL colors and half
+   * of them do not clear 4.5:1 as small text on one of the two
+   * grounds — cyan measures 1.73:1 on white, warning 2.04:1. Use
+   * these anywhere the color carries words. Measurements are in the
+   * BRAND block. */
+  --color-altokia-cyan-text: var(--altokia-cyan-text);
+  --color-altokia-violet-text: var(--altokia-violet-text);
+  --color-altokia-magenta-text: var(--altokia-magenta-text);
+  --color-altokia-success-text: var(--altokia-success-text);
+  --color-altokia-warning-text: var(--altokia-warning-text);
+  --color-altokia-danger-text: var(--altokia-danger-text);
+  /* ---- Altokia: radius and elevation ----
+   * rounded-altokia-sm | -md | -lg | -xl | -pill  →  9 · 11 · 14 · 18 · 999px
+   * shadow-altokia (resting) | shadow-altokia-pop (menus, dialogs) */
+  --radius-altokia-sm: var(--altokia-radius-sm);
+  --radius-altokia-md: var(--altokia-radius-md);
+  --radius-altokia-lg: var(--altokia-radius-lg);
+  --radius-altokia-xl: var(--altokia-radius-xl);
+  --radius-altokia-pill: var(--altokia-radius-pill);
+  --shadow-altokia: var(--altokia-shadow);
+  --shadow-altokia-pop: var(--altokia-shadow-pop);
+  /* Back-compat: the violet that is legible as text, previously the
+   * only one. Now an alias of --altokia-violet-text. */
+  --color-altokia-ink: var(--altokia-ink);
   --color-altokia-violet-lift: var(--altokia-violet-lift);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -231,58 +278,174 @@ html[data-theme="rose"] {
 }
 
 /* ============================================================
- * BRAND — Altokia's own colors
+ * BRAND — Altokia's own design system
  *
  * A THIRD, separate dimension from MODE and ACCENT above, and
  * deliberately not part of either: these are the colors of the
  * company that sells the CRM, not of the CRM. They never change
- * with the mode/accent a signed-in person picked, and they must
- * not leak into the client's workspace — a customer's CRM wears
- * the customer's terminology and the customer's accent, and
- * painting Altokia over it is exactly the wrong product.
+ * with the accent a signed-in person picked, and they must not leak
+ * into the client's workspace — a customer's CRM wears the
+ * customer's terminology and the customer's accent, and painting
+ * Altokia over it is exactly the wrong product.
  *
  * Only two surfaces use them: the Altokia console (/platform) and
  * the sign-in screen — the two places where the visitor is looking
  * at Altokia rather than at their own tool. Both go through
  * `ALTOKIA_SURFACE_TOKENS` in src/components/brand/altokia-theme.ts,
  * which maps these onto the product tokens for that subtree, so a
- * hex change here reaches both screens and nothing else.
+ * value change here reaches both screens and nothing else.
  *
- * Values are read off the logo: ink ground, split cyan/violet O,
- * magenta K. If the owner ever hands over exact brand values, the
- * six raw hexes below are the only thing to edit — everything else
- * (the console chrome, the sign-in page, the wordmark SVG) derives
- * from them with color-mix().
+ * WHAT CHANGED, AND WHY IT MATTERS
+ * --------------------------------
+ * These are now the owner's exact handoff values, not colors read
+ * off a logo. Two structural consequences:
  *
- * The palette is built for a dark ground, and the derived
- * `*-lift` values exist because the raw ones are not all legible
- * as text: violet on ink is 3.9:1 (fine for a fill, too low for
- * small text), so text uses --altokia-violet-lift at 8:1.
- * Magenta stays an accent — borders, marks, the gradient — and
- * never carries a paragraph.
+ *   1. The console has BOTH modes. It used to be dark-only, so the
+ *      palette was a flat list. The neutrals now live in
+ *      `data-mode` blocks alongside the CRM's own, which is what
+ *      makes the light/dark switch work on the console — the token
+ *      map in altokia-theme.ts is mode-agnostic and just follows.
+ *   2. The three brand hues and the three semantics do NOT vary by
+ *      mode. Only their *text* variants do.
+ *
+ * CONTRAST — measured, not guessed
+ * --------------------------------
+ * The raw hues are FILL colors. As small text they land like this
+ * (against #FFFFFF and against #101220):
+ *
+ *            on white   on dark surface
+ *   cyan       1.73        10.72
+ *   violet     5.21         3.57
+ *   magenta    3.46         5.37
+ *   success    2.20         8.44
+ *   warning    2.04         9.11
+ *   danger     3.71         5.01
+ *
+ * So every color that has to carry words goes through an
+ * `--altokia-*-text` variant. Following the rule that the BRAND
+ * color never moves, only the text does, each variant is the same
+ * hue mixed toward black (light mode) or white (dark mode) by the
+ * smallest amount that clears 4.5:1 on all three grounds of that
+ * mode — surface, surface-2 and the page background — with a little
+ * headroom. The percentages below are measured, not eyeballed;
+ * every one lands between 4.5:1 and 6.9:1. In dark mode four of the
+ * six already pass raw and are passed through untouched.
+ *
+ * The one number that does NOT clear 4.5:1 and cannot be fixed
+ * here: white on the magenta END of the brand gradient is 3.46:1
+ * (it is 5.21:1 on the violet end, 4.68:1 at the midpoint). The
+ * gradient is an exact brand value, so it stays; the fix, if the
+ * owner wants one, is a design decision about the CTA, not a token.
  * ============================================================ */
 
+/* ---- Fixed: the brand hues, the semantics, the geometry ---- */
+
 :root {
-  --altokia-ink: #05060a;
-  --altokia-surface: #0e1017;
-  --altokia-cyan: #22d3ee;
-  --altokia-violet: #6d4aff;
-  --altokia-magenta: #ff2d8f;
+  /* Brand. Exact handoff values. */
+  --altokia-cyan: #12d8f0;
+  --altokia-violet: #6c4df6;
+  --altokia-magenta: #ff2e93;
   --altokia-white: #ffffff;
 
-  /* Derived. Lightened toward white so they clear 4.5:1 on ink. */
-  --altokia-violet-lift: color-mix(in oklab, var(--altokia-violet) 62%, var(--altokia-white));
-  --altokia-violet-hover: color-mix(in oklab, var(--altokia-violet) 78%, var(--altokia-white));
-
-  /* The one brand gesture. Reserved for a single thin element per
-   * screen (a rule under a header, a card's top edge) — never a
-   * large fill and never behind text. */
+  /* The one brand gesture. Reserved for the primary button and the
+   * wordmark — never a card background, never behind a paragraph. */
   --altokia-gradient: linear-gradient(
-    90deg,
-    var(--altokia-cyan) 0%,
-    var(--altokia-violet) 52%,
-    var(--altokia-magenta) 100%
+    120deg,
+    var(--altokia-violet),
+    var(--altokia-magenta)
   );
+  /* Translucent violet: the active nav pill, selected rows, soft
+   * badges. Semi-transparent on purpose, so it composites onto
+   * whichever ground it lands on and works in both modes. */
+  --altokia-tint: rgba(108, 77, 246, 0.16);
+
+  /* Semantics. Identical in both modes, as specified. */
+  --altokia-success: #16c784;
+  --altokia-warning: #f5a524;
+  --altokia-danger: #f04455;
+
+  /* Radii. Four steps plus the pill; nothing else is in the system. */
+  --altokia-radius-sm: 9px;
+  --altokia-radius-md: 11px;
+  --altokia-radius-lg: 14px;
+  --altokia-radius-xl: 18px;
+  --altokia-radius-pill: 999px;
+
+  /* Spacing rhythm on a base of 4. Here so a component reaches for a
+   * step instead of inventing a 13. */
+  --altokia-space-1: 10px;
+  --altokia-space-2: 14px;
+  --altokia-space-3: 18px;
+  --altokia-space-4: 26px;
+}
+
+/* ---- MODE: neutrals, text-safe hues, elevation ---- */
+
+:root,
+html[data-mode="dark"] {
+  --altokia-bg: #07080f;
+  --altokia-surface: #101220;
+  --altokia-surface-2: #161829;
+  --altokia-border: #23263b;
+  --altokia-text: #f4f5fa;
+  --altokia-text-soft: #969ab4;
+  /* The nav rail. Level with the canvas here and separated by the
+   * hairline; in light mode it lifts to white instead. */
+  --altokia-rail: var(--altokia-bg);
+
+  /* Text-safe hues. Only violet needs help on a dark ground:
+   * 3.57:1 raw → 5.54:1 lifted (4.53:1 at its worst, on the violet
+   * tint over surface-2). The other five pass as they are. */
+  --altokia-cyan-text: var(--altokia-cyan);
+  --altokia-violet-text: color-mix(in oklab, var(--altokia-violet) 78%, var(--altokia-white));
+  --altokia-magenta-text: var(--altokia-magenta);
+  --altokia-success-text: var(--altokia-success);
+  --altokia-warning-text: var(--altokia-warning);
+  --altokia-danger-text: var(--altokia-danger);
+
+  /* Hover for a violet FILL. Lightened, not darkened: darkening it
+   * on a dark ground sinks the button into the page. 94% keeps the
+   * button's own white label at 4.58:1 and the fill at 4.06:1
+   * against the surface. */
+  --altokia-violet-hover: color-mix(in oklab, var(--altokia-violet) 94%, var(--altokia-white));
+
+  /* Elevation: a 1px border (--altokia-border) plus this. Shadow
+   * only — no backdrop-filter anywhere in the console. */
+  --altokia-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 10px 26px -14px rgba(0, 0, 0, 0.75);
+  --altokia-shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.6), 0 18px 40px -18px rgba(0, 0, 0, 0.85);
+}
+
+html[data-mode="light"] {
+  --altokia-bg: #edeff6;
+  --altokia-surface: #ffffff;
+  --altokia-surface-2: #f5f6fb;
+  --altokia-border: #e1e4ef;
+  --altokia-text: #0f1020;
+  --altokia-text-soft: #5b5e76;
+  --altokia-rail: var(--altokia-surface);
+
+  /* Text-safe hues, mixed toward black. Worst case of the six on
+   * the lightest-contrast ground (#edeff6) is 4.59:1. */
+  --altokia-cyan-text: color-mix(in oklab, var(--altokia-cyan) 62%, #000);
+  --altokia-violet-text: color-mix(in oklab, var(--altokia-violet) 88%, #000);
+  --altokia-magenta-text: color-mix(in oklab, var(--altokia-magenta) 82%, #000);
+  --altokia-success-text: color-mix(in oklab, var(--altokia-success) 68%, #000);
+  --altokia-warning-text: color-mix(in oklab, var(--altokia-warning) 66%, #000);
+  --altokia-danger-text: color-mix(in oklab, var(--altokia-danger) 84%, #000);
+
+  /* Darkened on hover here: white label 5.21:1 → 6.82:1. */
+  --altokia-violet-hover: color-mix(in oklab, var(--altokia-violet) 88%, #000);
+
+  --altokia-shadow: 0 1px 2px rgba(15, 16, 32, 0.06), 0 8px 22px -12px rgba(15, 16, 32, 0.16);
+  --altokia-shadow-pop: 0 2px 6px rgba(15, 16, 32, 0.08), 0 18px 40px -16px rgba(15, 16, 32, 0.22);
+}
+
+/* ---- Back-compat aliases ----
+ * The names the console and the sign-in screen were already written
+ * against. Both now follow the mode. Prefer the new names. */
+:root {
+  --altokia-ink: var(--altokia-bg);
+  --altokia-violet-lift: var(--altokia-violet-text);
 }
 
 @layer base {

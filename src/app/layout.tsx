@@ -1,7 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
-import { Inter } from "next/font/google";
+import {
+  Inter,
+  JetBrains_Mono,
+  Plus_Jakarta_Sans,
+  Sora,
+} from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/hooks/use-theme";
@@ -15,10 +20,77 @@ import {
   THEME_IDS,
 } from "@/lib/themes";
 
+// ------------------------------------------------------------------
+// TYPE — two families of families, deliberately kept apart.
+//
+// Inter under --font-sans is the CLIENT's CRM. It is what
+// `html { font-family: var(--font-sans) }` in globals.css resolves to,
+// so it dresses every dashboard screen and must keep doing exactly
+// that: the CRM is the customer's tool and wearing Altokia's face is
+// the wrong product.
+//
+// The three below are ALTOKIA's. They are declared here — the only
+// place next/font may be called for a variable that has to exist on
+// <html> — but they only *paint* inside the two surfaces that belong
+// to Altokia rather than to the client: the console at /platform and
+// the sign-in screen. Those surfaces re-point --font-sans at
+// --font-altokia-ui for their own subtree, the same way they already
+// re-point the color tokens (see components/brand/altokia-theme.ts).
+// Nothing outside them reads these variables, so the CRM renders
+// byte-for-byte as it did before.
+//
+// preload:false is on purpose. next/font preloads whatever the root
+// layout declares, on every route — which would put six brand font
+// files in front of every CRM page that never renders one of them.
+// The @font-face rules still ship in the same stylesheet, so the
+// console picks the faces up on first paint; with display:'swap' and
+// Next's metric-matched fallback the worst case is a brief fallback
+// frame on an internal ops screen, which is the right side of that
+// trade. Flip these to true if the console ever becomes the hot path.
+// ------------------------------------------------------------------
+
 const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
 });
+
+/** Big titles and the wordmark. Light 300, semibold 600. */
+const sora = Sora({
+  variable: "--font-altokia-display",
+  subsets: ["latin"],
+  weight: ["300", "600"],
+  display: "swap",
+  preload: false,
+  fallback: ["Segoe UI", "system-ui", "sans-serif"],
+});
+
+/** Every piece of console UI: buttons, menus, labels, tables. */
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-altokia-ui",
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  display: "swap",
+  preload: false,
+  fallback: ["Segoe UI", "system-ui", "sans-serif"],
+});
+
+/** Data only: phone numbers, amounts, dates, identifiers. */
+const jetBrainsMono = JetBrains_Mono({
+  variable: "--font-altokia-mono",
+  subsets: ["latin"],
+  weight: ["400"],
+  display: "swap",
+  preload: false,
+  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+});
+
+/** The four font variables, declared on <html> so both planes see them. */
+const FONT_VARIABLES = [
+  inter.variable,
+  sora.variable,
+  plusJakartaSans.variable,
+  jetBrainsMono.variable,
+].join(" ");
 
 export const metadata: Metadata = {
   title: {
@@ -90,7 +162,7 @@ export default async function RootLayout({
       lang={locale}
       data-theme={DEFAULT_THEME}
       data-mode={DEFAULT_MODE}
-      className={`${inter.variable} h-full antialiased`}
+      className={`${FONT_VARIABLES} h-full antialiased`}
       // The `theme-boot` script below rewrites `data-theme` and
       // `data-mode` on <html> from localStorage before React hydrates,
       // so for any non-default choice the client DOM intentionally

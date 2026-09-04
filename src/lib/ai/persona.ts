@@ -24,6 +24,7 @@ export function compilePersona(persona: AiPersona, opts: { defaultLanguage?: str
   const formality = persona.formality ?? 'tu'
   const length = persona.replyLength ?? 'short'
   const emojis = persona.emojis ?? false
+  const isPeru = /per[uú]/i.test(persona.region ?? '')
 
   const lines: string[] = []
 
@@ -60,6 +61,14 @@ export function compilePersona(persona: AiPersona, opts: { defaultLanguage?: str
   )
 
   lines.push(emojis ? 'A light touch of emojis is fine when it fits.' : 'Do not use emojis.')
+
+  if (isPeru) {
+    lines.push(
+      'Use casual, elegant Peruvian Spanish: natural expressions may include "qué bacán", "chévere", "de una", "ya", "buenazo", "te cuento", "te confirmo" and "tranqui" when they genuinely fit the customer\'s tone. ' +
+        'Do not force slang, overuse diminutives, or use caricatured regionalisms. Prefer clear everyday words such as precio, talla, color, stock, delivery, recojo, distrito, provincia, Yape, Plin and transferencia when relevant. ' +
+        'Keep the tone close and helpful, never overly formal or salesy.',
+    )
+  }
 
   if (persona.objective) {
     lines.push(`Your main objective: ${persona.objective}.`)

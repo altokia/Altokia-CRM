@@ -79,8 +79,8 @@ export function PlatformShell({ children }: { children: ReactNode }) {
             title={t('title')}
             className="text-sidebar-foreground"
           />
-          <p className="mt-2 hidden truncate text-xs text-muted-foreground lg:block">
-            {t('subtitle')}
+          <p className="mt-2 hidden truncate text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase lg:block">
+            {t('consoleSubtitle')}
           </p>
         </div>
 
@@ -109,7 +109,8 @@ export function PlatformShell({ children }: { children: ReactNode }) {
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'flex shrink-0 items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium transition-colors',
+                  'rounded-[var(--altokia-radius-md)]',
                   // The active label takes the *lifted* violet, not
                   // --primary: raw #6D4AFF on the ink ground is 3.9:1,
                   // which is fine under a button but not for a 14px
@@ -119,7 +120,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
                 )}
               >
-                <Icon className="size-4" />
+                <Icon size={18} strokeWidth={1.75} className="shrink-0" />
                 {t(`nav.${item.key}`)}
               </Link>
             );
