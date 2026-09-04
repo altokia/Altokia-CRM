@@ -15,6 +15,7 @@ import {
   phoneVariants,
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
+import { resolveOutboundMediaLink } from '@/lib/storage/outbound-link'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -236,13 +237,17 @@ export async function engineSendMedia(
 
   const accessToken = decrypt(config.access_token)
 
+  // Meta fetches the file itself, so a private-bucket object needs a
+  // signed URL that outlives the request just long enough.
+  const deliverableLink = await resolveOutboundMediaLink(db, args.link)
+
   const attempt = async (phone: string): Promise<string> => {
     const r = await sendMediaMessage({
       phoneNumberId: config.phone_number_id,
       accessToken,
       to: phone,
       kind: args.kind,
-      link: args.link,
+      link: deliverableLink,
       caption: args.caption,
       filename: args.filename,
     })

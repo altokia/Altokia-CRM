@@ -399,7 +399,7 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
     image: { id: '1234567890123456', mime_type: 'image/jpeg', caption: 'hi' },
   }
 
-  it('stores a durable bucket URL instead of the expiring proxy path', async () => {
+  it('stores the account-scoped media path instead of the expiring Meta proxy', async () => {
     await runWebhook(IMAGE_MESSAGE)
 
     expect(h.state.storageUploads).toHaveLength(1)
@@ -408,8 +408,10 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
       'account-acc-1/inbound/1234567890123456-image-1700000000.jpg',
     )
     expect(h.state.upsertCalls[0].row).toMatchObject({
+      // 047 made the bucket private: the row carries our own proxy
+      // path, which the browser reads through an account check.
       media_url:
-        'https://cdn.test/chat-media/account-acc-1/inbound/1234567890123456-image-1700000000.jpg',
+        '/api/media/chat-media/account-acc-1/inbound/1234567890123456-image-1700000000.jpg',
       // Meta's MIME type used to be discarded outright (`void mediaType`).
       media_type: 'image/jpeg',
     })

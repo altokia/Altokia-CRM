@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { toMediaProxyUrl } from "@/lib/storage/media-url";
 
 /**
  * Shared media-upload helper for Supabase Storage buckets that use the
@@ -125,11 +126,11 @@ export async function uploadAccountMedia(
   });
   if (upErr) throw new Error(upErr.message);
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(bucket).getPublicUrl(path);
-
-  return { publicUrl, path };
+  // Both buckets are private since 047. What the caller gets back — and
+  // what ends up on the message row — is the account-scoped proxy path;
+  // the outbound sender mints a short-lived signed URL for Meta when it
+  // actually needs one.
+  return { publicUrl: toMediaProxyUrl(bucket, path), path };
 }
 
 /**

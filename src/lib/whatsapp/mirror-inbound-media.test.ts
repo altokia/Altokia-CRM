@@ -138,7 +138,7 @@ describe("mirrorInboundMedia", () => {
     vi.restoreAllMocks();
   });
 
-  it("uploads to chat-media and returns the durable public URL", async () => {
+  it("uploads to chat-media and returns the account-scoped proxy path", async () => {
     const { storage, uploads } = fakeStorage();
     const download = fakeDownload(1024);
 
@@ -157,8 +157,10 @@ describe("mirrorInboundMedia", () => {
       `account-${ACCOUNT}/inbound/${MEDIA_ID}-image-1754899200.jpg`,
     );
     expect(uploads[0].options.contentType).toBe("image/jpeg");
+    // The bucket is private since 047, so what lands on the message is
+    // the proxy path, never a public URL.
     expect(url).toBe(
-      `https://cdn.test/storage/chat-media/account-${ACCOUNT}/inbound/${MEDIA_ID}-image-1754899200.jpg`,
+      `/api/media/chat-media/account-${ACCOUNT}/inbound/${MEDIA_ID}-image-1754899200.jpg`,
     );
   });
 

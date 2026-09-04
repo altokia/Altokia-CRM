@@ -23,8 +23,13 @@
  * object URL keeps its blob's data alive by itself.
  */
 
-/** Prefix of the auth-gated proxy — these need a credentialed fetch. */
-const PROXY_PREFIX = "/api/whatsapp/media/";
+/**
+ * Prefixes of the auth-gated proxies — these need a credentialed fetch.
+ * `/api/whatsapp/media/` streams from Meta; `/api/media/` (047) redirects
+ * to a signed URL for an object in a private bucket. Both are same-origin
+ * so the session cookie rides along on its own.
+ */
+const PROXY_PREFIXES = ["/api/whatsapp/media/", "/api/media/"];
 
 /**
  * How many blobs to hold. Worst case is a thread that's nothing but
@@ -63,7 +68,7 @@ export class MediaResponseError extends Error {
 
 /** True for inbound media that has to be pulled through our proxy. */
 export function isProxiedMediaUrl(url: string): boolean {
-  return url.startsWith(PROXY_PREFIX);
+  return PROXY_PREFIXES.some((prefix) => url.startsWith(prefix));
 }
 
 function remember(url: string, blob: Blob): void {

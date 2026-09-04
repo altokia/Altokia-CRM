@@ -36,6 +36,7 @@ import {
 } from '@/lib/whatsapp/interactive';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
+import { resolveOutboundMediaLink } from '@/lib/storage/outbound-link';
 import { transitionHandoff } from '@/lib/conversations/handoff';
 import {
   sanitizePhoneForMeta,
@@ -362,12 +363,19 @@ export async function sendMessageToConversation(
       return result.messageId;
     }
     if (isMediaKind) {
+      // Meta fetches the file itself, with no session of ours. Since 047
+      // the bucket is private, so the link handed over is signed and
+      // short-lived rather than permanently public.
+      const deliverableLink = await resolveOutboundMediaLink(
+        supabaseAdmin(),
+        mediaUrl!,
+      );
       const result = await sendMediaMessage({
         phoneNumberId: config.phone_number_id,
         accessToken,
         to: phone,
         kind: messageType as MediaKind,
-        link: mediaUrl!,
+        link: deliverableLink,
         caption: contentText || undefined,
         filename: filename || undefined,
         contextMessageId,

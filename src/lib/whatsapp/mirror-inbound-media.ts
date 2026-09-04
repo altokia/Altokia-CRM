@@ -1,3 +1,4 @@
+import { toMediaProxyUrl } from "@/lib/storage/media-url";
 import { downloadMedia } from "./meta-api";
 import { extensionForMime } from "@/lib/media/filename";
 import { buildMediaPath, MEDIA_MAX_BYTES } from "@/lib/storage/upload-media";
@@ -226,10 +227,11 @@ export async function mirrorInboundMedia(
       return null;
     }
 
-    const {
-      data: { publicUrl },
-    } = storage.from(MIRROR_BUCKET).getPublicUrl(path);
-    return publicUrl || null;
+    // The bucket is private since 047, so what gets stored on the
+    // message is the account-scoped proxy path, not a public URL. A
+    // customer's voice note or scanned document must not be readable by
+    // anyone who has the link.
+    return toMediaProxyUrl(MIRROR_BUCKET, path);
   } catch (error) {
     console.warn(
       `[mirror-media] could not mirror ${mediaId}:`,
