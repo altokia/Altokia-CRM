@@ -7,9 +7,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  /* Altokia's faces are the product's faces now: Plus Jakarta Sans for
+   * the interface, Sora for display, JetBrains Mono for data. Declared
+   * at the theme layer so every component that already says font-sans,
+   * font-heading or font-mono follows without a class change. */
+  --font-sans: var(--font-altokia-ui);
+  --font-mono: var(--font-altokia-mono);
+  --font-heading: var(--font-altokia-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -148,66 +152,89 @@
 
 :root,
 html[data-mode="dark"] {
-  --background: oklch(0.13 0.01 260);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.18 0.01 260);
-  --card-2: oklch(0.205 0.01 260);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.18 0.01 260);
-  --popover-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.22 0.01 260);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.22 0.01 260);
-  --muted-foreground: oklch(0.65 0.01 260);
-  --accent: oklch(0.22 0.01 260);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.28 0.01 260);
-  --input: oklch(0.28 0.01 260);
+  /* Altokia's grounds, not a generic slate. The brand tokens are
+   * defined further down in this same block, and `var()` resolves at
+   * use time, so pointing at them here is safe regardless of order. */
+  --background: var(--altokia-bg);
+  --foreground: var(--altokia-text);
+  --card: var(--altokia-surface);
+  --card-2: var(--altokia-surface-2);
+  --card-foreground: var(--altokia-text);
+  --popover: var(--altokia-surface);
+  --popover-foreground: var(--altokia-text);
+  --secondary: var(--altokia-surface-2);
+  --secondary-foreground: var(--altokia-text);
+  --muted: var(--altokia-surface-2);
+  --muted-foreground: var(--altokia-text-soft);
+  --accent: var(--altokia-surface-2);
+  --accent-foreground: var(--altokia-text);
+  --destructive: var(--altokia-danger);
+  --border: var(--altokia-border);
+  --input: var(--altokia-border);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.16 0.01 260);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.22 0.01 260);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.28 0.01 260);
+  --sidebar: var(--altokia-surface);
+  --sidebar-foreground: var(--altokia-text);
+  --sidebar-accent: var(--altokia-surface-2);
+  --sidebar-accent-foreground: var(--altokia-text);
+  --sidebar-border: var(--altokia-border);
 }
 
 html[data-mode="light"] {
-  --background: oklch(0.99 0.002 260);
-  --foreground: oklch(0.21 0.01 260);
-  --card: oklch(1 0 0);
-  --card-2: oklch(0.985 0.002 260);
-  --card-foreground: oklch(0.21 0.01 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.01 260);
-  --secondary: oklch(0.967 0.003 260);
-  --secondary-foreground: oklch(0.25 0.01 260);
-  --muted: oklch(0.967 0.003 260);
-  --muted-foreground: oklch(0.52 0.015 260);
-  --accent: oklch(0.96 0.004 260);
-  --accent-foreground: oklch(0.25 0.01 260);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0.004 260);
-  --input: oklch(0.922 0.004 260);
+  --background: var(--altokia-bg);
+  --foreground: var(--altokia-text);
+  --card: var(--altokia-surface);
+  --card-2: var(--altokia-surface-2);
+  --card-foreground: var(--altokia-text);
+  --popover: var(--altokia-surface);
+  --popover-foreground: var(--altokia-text);
+  --secondary: var(--altokia-surface-2);
+  --secondary-foreground: var(--altokia-text);
+  --muted: var(--altokia-surface-2);
+  --muted-foreground: var(--altokia-text-soft);
+  --accent: var(--altokia-surface-2);
+  --accent-foreground: var(--altokia-text);
+  --destructive: var(--altokia-danger);
+  --border: var(--altokia-border);
+  --input: var(--altokia-border);
   --chart-2: oklch(0.6 0.1 260);
   --chart-3: oklch(0.7 0.06 260);
   --chart-4: oklch(0.8 0.04 260);
   --chart-5: oklch(0.87 0.03 260);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0.002 260);
-  --sidebar-foreground: oklch(0.21 0.01 260);
-  --sidebar-accent: oklch(0.96 0.004 260);
-  --sidebar-accent-foreground: oklch(0.25 0.01 260);
-  --sidebar-border: oklch(0.922 0.004 260);
+  --sidebar: var(--altokia-surface);
+  --sidebar-foreground: var(--altokia-text);
+  --sidebar-accent: var(--altokia-surface-2);
+  --sidebar-accent-foreground: var(--altokia-text);
+  --sidebar-border: var(--altokia-border);
 }
 
 /* ---- ACCENT: primary color ---- */
 
+/* Altokia's own accent, and the default: a customer opening the CRM
+ * for the first time should see the brand that sold it to them, not a
+ * generic violet. The other themes stay available in the picker — some
+ * businesses will want their own colour, and taking that away would be
+ * removing a feature to make a point. */
 :root,
+html[data-theme="altokia"] {
+  --primary: var(--altokia-violet);
+  --primary-foreground: var(--altokia-white);
+  --primary-hover: var(--altokia-violet-hover);
+  --primary-soft: var(--altokia-tint);
+  --primary-soft-2: color-mix(in oklab, var(--altokia-violet) 28%, transparent);
+  --ring: var(--altokia-violet-text);
+  --chart-1: var(--altokia-violet);
+  --chart-2: var(--altokia-cyan);
+  --chart-3: var(--altokia-magenta);
+  --sidebar-primary: var(--altokia-violet);
+  --sidebar-primary-foreground: var(--altokia-white);
+  --sidebar-ring: var(--altokia-violet-text);
+}
+
 html[data-theme="violet"] {
   --primary: oklch(0.526 0.247 293);
   --primary-foreground: oklch(0.985 0 0);

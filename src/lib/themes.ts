@@ -14,6 +14,7 @@
  */
 
 export const THEME_IDS = [
+  "altokia",
   "violet",
   "emerald",
   "cobalt",
@@ -23,7 +24,7 @@ export const THEME_IDS = [
 
 export type ThemeId = (typeof THEME_IDS)[number];
 
-export const DEFAULT_THEME: ThemeId = "violet";
+export const DEFAULT_THEME: ThemeId = "altokia";
 
 export const STORAGE_KEY = "wacrm.theme";
 
@@ -67,6 +68,14 @@ export interface ThemeMeta {
 }
 
 export const THEMES: ReadonlyArray<ThemeMeta> = [
+  {
+    id: "altokia",
+    name: "Altokia",
+    tagline: "La marca de la plataforma. Es el que ves si no eliges otro.",
+    // Literal, not a var(): the boot script paints this chip before the
+    // stylesheet has resolved anything.
+    swatch: "#6c4df6",
+  },
   {
     id: "violet",
     name: "Violet",

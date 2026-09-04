@@ -115,6 +115,15 @@ const ALTOKIA_SURFACE_TOKENS: Record<string, string> = {
   '--font-sans': 'var(--font-altokia-ui)',
   '--font-heading': 'var(--font-altokia-display)',
   '--font-mono': 'var(--font-altokia-mono)',
+  // Re-pointing the variables is NOT enough on its own, and this is
+  // the trap: globals.css declares `html { font-family: var(--font-sans) }`
+  // exactly once, so every descendant inherits the *computed* family.
+  // Changing the variable further down the tree resolves against
+  // nothing — the console kept rendering in Inter while every token
+  // said otherwise. Declaring the family here is what actually makes
+  // the subtree switch, and it stops at the subtree, so the customer's
+  // CRM is untouched.
+  fontFamily: 'var(--font-altokia-ui)',
 };
 
 export const ALTOKIA_SURFACE_STYLE = ALTOKIA_SURFACE_TOKENS as CSSProperties;
@@ -128,5 +137,5 @@ export function altokiaSurfaceCss(plane: string): string {
   const declarations = Object.entries(ALTOKIA_SURFACE_TOKENS)
     .map(([name, value]) => `${name}:${value}`)
     .join(';');
-  return `body:has([data-plane="${plane}"]){${declarations}}`;
+  return `body:has([data-plane="${plane}"]){${declarations};font-family:var(--font-altokia-ui)}`;
 }
