@@ -283,6 +283,23 @@ export async function PUT(
       )
     }
 
+    // An Altokia operator is not a client to be reset. Without this a
+    // 'billing' operator could aim this route at a platform 'owner' who
+    // happens to hold a profile in some account, take their password
+    // and read it back in clear — a way around the whole platform role
+    // hierarchy, from inside the console.
+    const { data: targetOperator } = await ctx.db
+      .from('platform_operators')
+      .select('user_id')
+      .eq('user_id', targetUserId)
+      .maybeSingle()
+    if (targetOperator) {
+      return NextResponse.json(
+        { error: 'That login belongs to an Altokia operator, not to this client.' },
+        { status: 403 }
+      )
+    }
+
     const isOwner = targetUserId === account.owner_user_id
     if (!memberRow && !isOwner) {
       // Not "forbidden": from an operator's point of view this person

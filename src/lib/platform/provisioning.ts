@@ -291,7 +291,7 @@ export async function setAccountAccess(
   // The owner is unioned in rather than trusted to show up in the
   // member list: if their profile ever pointed elsewhere, a revocation
   // that skipped them would leave the one login that matters open.
-  const userIds = Array.from(
+  const candidates = Array.from(
     new Set(
       [
         account.owner_user_id as string | null,
@@ -299,6 +299,25 @@ export async function setAccountAccess(
       ].filter((id): id is string => typeof id === 'string' && id.length > 0),
     ),
   )
+
+  // Never touch an Altokia login. An operator can hold a profile inside
+  // a client account (that is how support access works), and banning
+  // one here would let a 'billing' operator lock a platform 'owner' out
+  // of the whole product by revoking an unrelated customer.
+  const { data: operators, error: operatorsError } = await db
+    .from('platform_operators')
+    .select('user_id')
+    .in('user_id', candidates)
+
+  if (operatorsError) {
+    console.error('[platform/provisioning] operator lookup failed:', operatorsError)
+    throw new PlatformAuthError('Could not separate operators from client logins', 500)
+  }
+
+  const operatorIds = new Set(
+    ((operators ?? []) as { user_id: string }[]).map((o) => o.user_id),
+  )
+  const userIds = candidates.filter((id) => !operatorIds.has(id))
 
   const auth = adminAuth().auth.admin
   const failed: string[] = []

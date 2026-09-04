@@ -265,6 +265,21 @@ export async function getCurrentAccount(): Promise<AccountContext> {
     throw new ForbiddenError("Profile is not linked to an account");
   }
 
+  // The gate lives here, not in each route. `assertAccountAccess` was
+  // available and called from exactly one of the fifty-six authenticated
+  // routes, which meant a session opened moments before the revocation
+  // kept working everywhere else until its token expired. Every route
+  // that resolves an account passes through this function, so refusing
+  // here is the only placement that cannot be forgotten.
+  //
+  // Deliberately not the same as a suspended account: suspension still
+  // reads (see assertAccountActive). A revoked one does not get in.
+  if (typeof account.access_revoked_at === "string" && account.access_revoked_at) {
+    throw new ForbiddenError(
+      "Access to this account has been withdrawn. Contact Altokia to restore it.",
+    );
+  }
+
   return {
     supabase,
     userId: user.id,

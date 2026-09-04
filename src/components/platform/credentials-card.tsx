@@ -46,6 +46,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CredentialsPanel } from './credentials-panel';
+import { normalizeCredentials } from './platform-api';
 import { MIN_PASSWORD_LENGTH, PasswordField } from './password-field';
 import {
   platformFetch,
@@ -79,10 +80,11 @@ export function CredentialsCard({
 
   const load = useCallback(async () => {
     try {
-      const payload = await platformFetch<AccountCredentials>(
+      // The route answers nested; the card reads flat. Normalise here.
+      const payload = await platformFetch<unknown>(
         `/api/platform/accounts/${accountId}/credentials`,
       );
-      setData(payload);
+      setData(normalizeCredentials(payload));
       setError(null);
     } catch (err) {
       // 403: an operator below billing. 404: the access layer refusing

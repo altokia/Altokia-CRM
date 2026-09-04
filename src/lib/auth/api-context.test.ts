@@ -7,8 +7,22 @@ import { __resetRateLimitForTests, RATE_LIMITS } from "@/lib/rate-limit";
 
 // Mock the service-role client factory — requireApiKey only stashes
 // the returned client in the context; tests never call through it.
+// The admin client is used for two things now: it is handed back as
+// `ctx.supabase`, and requireApiKey reads accounts.access_revoked_at
+// through it so a withdrawn account's keys stop working too. The stub
+// answers that one query with "not revoked".
+const accountAccess = { access_revoked_at: null as string | null };
 vi.mock("@/lib/flows/admin-client", () => ({
-  supabaseAdmin: () => ({ __isMockAdminClient: true }),
+  supabaseAdmin: () => ({
+    __isMockAdminClient: true,
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({ data: { ...accountAccess }, error: null }),
+        }),
+      }),
+    }),
+  }),
 }));
 
 // Mock the store so we control which row a hash resolves to.

@@ -105,11 +105,26 @@ export async function requireApiKey(
     throw forbidden(`This API key is missing the '${scope}' scope`);
   }
 
+  // A revoked account is revoked for its machines too. Without this the
+  // ban only covers the browser: an API key kept reading and writing
+  // every record through /api/v1, with a service-role client, for as
+  // long as the key existed. Checked here rather than per route so no
+  // endpoint can forget it.
+  const admin = supabaseAdmin();
+  const { data: account } = await admin
+    .from('accounts')
+    .select('access_revoked_at')
+    .eq('id', row.account_id)
+    .maybeSingle();
+  if (account?.access_revoked_at) {
+    throw forbidden('Access to this account has been withdrawn.');
+  }
+
   touchLastUsed(row.id);
 
   return {
     authType: 'api_key',
-    supabase: supabaseAdmin(),
+    supabase: admin,
     accountId: row.account_id,
     keyId: row.id,
     scopes: row.scopes,

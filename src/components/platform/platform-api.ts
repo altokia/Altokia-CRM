@@ -289,6 +289,46 @@ export interface AccountCredentials {
   member_count: number | null;
 }
 
+/**
+ * The route answers in a nested shape (`owner`, `credentials`, `access`)
+ * while every component here reads a flat one. Normalising in the single
+ * place the response arrives keeps the components as they are, and keeps
+ * one mismatch from silently blanking the card: before this, `revoked`
+ * read `undefined` on a revoked account, so the badge, the reason and
+ * the restore button were all invisible exactly when they mattered.
+ *
+ * Tolerates the flat shape too, so it does not break if the route is
+ * ever flattened.
+ */
+export function normalizeCredentials(raw: unknown): AccountCredentials {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const sub = (key: string): Record<string, unknown> => {
+    const v = o[key];
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+  };
+  const owner = sub('owner');
+  const creds = sub('credentials');
+  const access = sub('access');
+
+  const str = (...candidates: unknown[]): string | null => {
+    for (const c of candidates) if (typeof c === 'string' && c) return c;
+    return null;
+  };
+
+  return {
+    owner_email: str(owner.email, o.owner_email),
+    issued_by_altokia:
+      creds.issued_by_altokia === true ||
+      o.issued_by_altokia === true ||
+      typeof creds.issued_at === 'string',
+    credentials_issued_at: str(creds.issued_at, o.credentials_issued_at),
+    access_revoked_at: str(access.revoked_at, o.access_revoked_at),
+    access_revoked_reason: str(access.reason, o.access_revoked_reason),
+    member_count:
+      typeof o.member_count === 'number' ? o.member_count : null,
+  };
+}
+
 /** PUT — a new password, shown once, same rules as above. */
 export interface PasswordResetResponse {
   email: string;
