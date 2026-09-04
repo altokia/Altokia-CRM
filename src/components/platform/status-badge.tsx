@@ -17,6 +17,13 @@
 // Trial is deliberately NOT amber: an operator has to be able to spot
 // the accounts somebody actually stopped, and a screen where half the
 // rows are warning-coloured hides exactly that.
+//
+// SHAPE. A pill (--altokia-radius-pill) filled with its own colour at
+// 14% and lettered in that colour's text-weight variant. Two colours
+// per state, not one, because the palette's raw hues are FILLS: amber
+// at #F5A524 measures 2.04:1 as small text on white. globals.css
+// already mixes each hue per mode into an --altokia-*-text token, so
+// the badge asks for the token instead of doing its own arithmetic.
 // ============================================================
 
 import { useTranslations } from 'next-intl';
@@ -39,6 +46,16 @@ export const BRAND_VIOLET = 'var(--altokia-violet, #6C4DF6)';
 export const BRAND_CYAN = 'var(--altokia-cyan, #12D8F0)';
 export const BRAND_MAGENTA = 'var(--altokia-magenta, #FF2E93)';
 
+/**
+ * The text-weight twin of each fill above. Same hue, moved toward
+ * black or white by whatever the current mode needs — globals.css
+ * measures those mixes, this file must not guess at them.
+ */
+export const SEMANTIC_SUCCESS_TEXT = 'var(--altokia-success-text, #16C784)';
+export const SEMANTIC_WARNING_TEXT = 'var(--altokia-warning-text, #F5A524)';
+export const SEMANTIC_DANGER_TEXT = 'var(--altokia-danger-text, #F04455)';
+export const BRAND_VIOLET_TEXT = 'var(--altokia-violet-text, #6C4DF6)';
+
 /** The colour that stands for each state, at full strength. */
 export const STATUS_COLOR: Record<AccountStatus, string> = {
   trial: BRAND_VIOLET,
@@ -47,22 +64,32 @@ export const STATUS_COLOR: Record<AccountStatus, string> = {
   cancelled: SEMANTIC_DANGER,
 };
 
+/** The same four states, in the weight that can carry words. */
+export const STATUS_TEXT_COLOR: Record<AccountStatus, string> = {
+  trial: BRAND_VIOLET_TEXT,
+  active: SEMANTIC_SUCCESS_TEXT,
+  suspended: SEMANTIC_WARNING_TEXT,
+  cancelled: SEMANTIC_DANGER_TEXT,
+};
+
 /**
- * A saturated brand colour is a fill, not a label: #16C784 as text is
- * fine on the ink ground and far too pale on the light one. Mixing a
- * fifth of the surrounding foreground into it pulls the text toward
- * whichever end the mode needs — lighter on dark, darker on light —
- * while the hue, which is the part being read at a glance, is
- * untouched. The tint behind it is the same colour at 16%, which is
- * the brand's own tint recipe.
+ * Kept for callers that hold a raw hue and no token twin: mixing a
+ * quarter of the surrounding foreground into a fill pulls it toward
+ * whichever end the mode needs. Prefer the `*_TEXT` constants above
+ * when the colour is one of the six the brand sheet names.
  */
 export function toneText(color: string): string {
   return `color-mix(in oklab, ${color} 76%, var(--foreground))`;
 }
 
+/** The badge ground: the colour itself at 14%, over whatever it lands on. */
 export function toneTint(color: string): string {
-  return `color-mix(in oklab, ${color} 16%, transparent)`;
+  return `color-mix(in oklab, ${color} 14%, transparent)`;
 }
+
+/** Pill geometry shared by both badges on this screen. */
+const PILL =
+  'h-6 rounded-[var(--altokia-radius-pill)] border-transparent px-2.5 text-[11px] font-semibold';
 
 export function StatusBadge({
   status,
@@ -72,13 +99,12 @@ export function StatusBadge({
   className?: string;
 }) {
   const t = useTranslations('Platform.status');
-  const color = STATUS_COLOR[status];
   return (
     <Badge
-      className={cn('rounded-full border-transparent px-2.5', className)}
+      className={cn(PILL, className)}
       style={{
-        backgroundColor: toneTint(color),
-        color: toneText(color),
+        backgroundColor: toneTint(STATUS_COLOR[status]),
+        color: STATUS_TEXT_COLOR[status],
       }}
     >
       {t(status)}
@@ -105,13 +131,13 @@ export function AccessBadge({
   if (!revokedAt) return null;
   return (
     <Badge
-      className={cn('gap-1 rounded-full border-transparent px-2.5', className)}
+      className={cn(PILL, 'gap-1.5', className)}
       style={{
         backgroundColor: toneTint(SEMANTIC_DANGER),
-        color: toneText(SEMANTIC_DANGER),
+        color: SEMANTIC_DANGER_TEXT,
       }}
     >
-      <Lock />
+      <Lock size={18} strokeWidth={1.75} />
       {t('noAccess')}
     </Badge>
   );

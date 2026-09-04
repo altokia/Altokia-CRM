@@ -386,6 +386,12 @@ html[data-theme="rose"] {
    * whichever ground it lands on and works in both modes. */
   --altokia-tint: rgba(108, 77, 246, 0.16);
 
+  /* A near-black that does NOT follow the mode. Used to darken the
+   * bright brand hues where white type sits on top of them — an avatar
+   * monogram has to stay readable in light mode too, so it cannot mix
+   * toward a ground that turns white. */
+  --altokia-ink-fixed: #07080f;
+
   /* Semantics. Identical in both modes, as specified. */
   --altokia-success: #16c784;
   --altokia-warning: #f5a524;

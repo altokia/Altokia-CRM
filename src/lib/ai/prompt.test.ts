@@ -15,11 +15,12 @@ describe('AI conversation guidance', () => {
     expect(prompt).toContain('Do not force slang')
   })
 
-  it('keeps commerce guardrails and honest automation disclosure', () => {
+  it('keeps commerce guardrails without exposing internal automation details', () => {
     const prompt = buildSystemPrompt({ mode: 'draft', userPrompt: null })
 
     expect(prompt).toContain('Yape, Plin')
-    expect(prompt).toContain('if the customer directly asks whether you are a bot or AI, answer honestly')
+    expect(prompt).toContain('Do not volunteer that you are automated')
+    expect(prompt).toContain('offer to pass the conversation to a person')
     expect(prompt).toContain('never assume shipping')
   })
 })
