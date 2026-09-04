@@ -45,7 +45,12 @@ interface AccountSummary {
   default_currency: string;
   /** IANA zone the business operates in (migration 040). 'UTC' until set. */
   timezone: string;
-  /** Per-business label overrides, e.g. { won_label: 'Matriculado' }. */
+  /**
+   * Per-business word overrides, keyed by the stable concept names in
+   * lib/terminology (`won`, `lead`, `catalog_item`…), e.g.
+   * `{ won: 'Matriculado' }`. Read it through `useTerm()`, which falls
+   * back to the translated default for anything not renamed.
+   */
   terminology: Record<string, string>;
 }
 

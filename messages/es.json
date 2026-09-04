@@ -131,6 +131,74 @@
     },
     "emptyState": {
       "title": "Aún no hay datos suficientes"
+    },
+    "operations": {
+      "title": "Operación del día",
+      "description": "Lo que necesita atención ahora mismo.",
+      "refresh": "Actualizar",
+      "updated": "Actualizado a las {time}",
+      "leads": {
+        "title": "Leads",
+        "newToday": "Nuevos hoy",
+        "open": "Abiertos",
+        "highPriority": "Prioridad alta",
+        "followUpOverdue": "Seguimientos vencidos",
+        "followUpToday": "Seguimientos de hoy",
+        "wonThisMonth": "{term} este mes",
+        "byLabel": "Por etiqueta",
+        "noLabels": "Todavía no hay leads etiquetados."
+      },
+      "conversations": {
+        "title": "Conversaciones",
+        "waitingForHuman": "Esperando a una persona",
+        "aiActive": "Atendidas por la IA",
+        "humanActive": "Con un asesor",
+        "unassignedWaiting": "Sin asignar",
+        "longestWait": "Espera más larga",
+        "minutes": "{count} min",
+        "none": "Nadie esperando"
+      },
+      "tasks": {
+        "title": "Tareas",
+        "open": "Abiertas",
+        "pending": "Sin asignar",
+        "overdue": "Vencidas",
+        "dueToday": "Vencen hoy",
+        "byType": "Por tipo",
+        "viewQueue": "Ver Mi trabajo"
+      },
+      "ai": {
+        "title": "Asistente",
+        "repliesToday": "Respuestas hoy",
+        "conversationsHandledToday": "Conversaciones atendidas",
+        "handoffsToday": "Derivaciones hoy",
+        "restricted": "Solo visible para administradores"
+      },
+      "actionTypes": {
+        "HUMAN_CHAT": "Atender chat",
+        "CALL": "Llamada",
+        "FOLLOW_UP": "Seguimiento",
+        "APPOINTMENT": "Cita",
+        "QUOTE": "Cotización",
+        "REVIEW_REQUIRED": "Revisar",
+        "AI_CONTINUE": "Sigue la IA",
+        "other": "Otro"
+      },
+      "empty": "No se pudieron cargar las métricas."
+    },
+    "advisors": {
+      "title": "{term} disponibles",
+      "available": "Disponible",
+      "offShift": "Fuera de turno",
+      "busy": "Ocupado",
+      "offline": "Sin conexión",
+      "atCapacity": "Sin capacidad",
+      "nobody": "No hay nadie disponible en este momento.",
+      "nextShift": "Entra {time}",
+      "load": "{count} en curso",
+      "viewTeam": "Ver equipo",
+      "summary": "{available} de {total} disponibles",
+      "unavailable": "No se pudo cargar el equipo."
     }
   },
   "Inbox": {
@@ -1583,7 +1651,8 @@
       "members": "Miembros del equipo",
       "api": "Claves API",
       "catalog": "Catálogo",
-      "labels": "Etiquetas de lead"
+      "labels": "Etiquetas de lead",
+      "terminology": "Terminología"
     },
     "groups": {
       "account": "Cuenta",
@@ -1952,6 +2021,37 @@
       "builtinHint": "Las integradas no se eliminan; renómbralas si quieres.",
       "moveUp": "Subir",
       "moveDown": "Bajar"
+    },
+    "terminology": {
+      "title": "Cómo llamas a las cosas",
+      "description": "Cambia las palabras del CRM por las que usa tu negocio. Solo cambia lo que se ve; los datos no se mueven.",
+      "save": "Guardar",
+      "saved": "Terminología actualizada",
+      "saveError": "No se pudo guardar la terminología",
+      "reset": "Usar la palabra por defecto",
+      "defaultLabel": "Por defecto: {value}",
+      "terms": {
+        "won": "Cliente ganado",
+        "lost": "Cliente perdido",
+        "lead": "Lead",
+        "leads": "Leads (plural)",
+        "deal": "Oportunidad",
+        "advisor": "Asesor",
+        "advisors": "Asesores (plural)",
+        "pipeline": "Pipeline",
+        "catalogItem": "Producto o servicio"
+      },
+      "hints": {
+        "won": "Como los llamas cuando ya cerraron: Matriculado, Vendido, Cliente.",
+        "lost": "Descartado, No interesado, Perdido.",
+        "lead": "Prospecto, Interesado, Postulante.",
+        "leads": "El plural del anterior.",
+        "deal": "Matrícula, Venta, Contrato, Reserva.",
+        "advisor": "Asesor, Vendedor, Agente, Doctor.",
+        "advisors": "El plural del anterior.",
+        "pipeline": "Embudo, Proceso, Ruta de venta.",
+        "catalogItem": "Curso, Departamento, Tratamiento, Producto."
+      }
     }
   },
   "MyWork": {
@@ -2054,5 +2154,16 @@
     "noDate": "No entendí cuándo. Prueba: «mañana a las 10», «el lunes», «en 2 horas».",
     "error": "No se pudo crear el recordatorio",
     "hint": "Escríbelo con tus palabras; la fecha se lee sola y la tarea aparece en «Mi trabajo»."
+  },
+  "Terms": {
+    "won": "Ganado",
+    "lost": "Perdido",
+    "lead": "Lead",
+    "leads": "Leads",
+    "deal": "Oportunidad",
+    "advisor": "Asesor",
+    "advisors": "Asesores",
+    "pipeline": "Pipeline",
+    "catalogItem": "Producto"
   }
 }

@@ -28,11 +28,20 @@ misconfigured scheduler is loud, not silent.
 
 Linux / VPS (`crontab -e`):
 
+The first line is not optional: `cron` does not inherit your interactive
+shell, so without it the three requests send an empty header and every
+one of them answers 401 — silently, since `-fsS` prints nothing on a
+clean failure. Use the same value as `AUTOMATION_CRON_SECRET`.
+
 ```
+CRON_SECRET=<the same value as AUTOMATION_CRON_SECRET>
 */2 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" https://crm.example.com/api/tasks/cron >/dev/null
 */2 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" https://crm.example.com/api/automations/cron >/dev/null
 */5 * * * * curl -fsS -H "x-cron-secret: $CRON_SECRET" https://crm.example.com/api/flows/cron >/dev/null
 ```
+
+On a panel that offers no place to declare a variable (Hostinger's
+hPanel among them), write the secret literally into each command.
 
 Hostinger hPanel → **Advanced → Cron Jobs**: same commands, one job
 each.

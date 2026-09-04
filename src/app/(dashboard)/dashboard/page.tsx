@@ -15,6 +15,7 @@ import {
   loadActivity,
   loadConversationsSeries,
   loadMetrics,
+  loadOperations,
   loadPipelineDonut,
   loadResponseTime,
 } from '@/lib/dashboard/queries'
@@ -22,6 +23,7 @@ import type {
   ActivityItem,
   ConversationsSeriesPoint,
   MetricsBundle,
+  OperationsMetrics,
   PipelineDonutData,
   ResponseTimeSummary,
 } from '@/lib/dashboard/types'
@@ -33,6 +35,8 @@ import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
+import { OperationsPanel } from '@/components/dashboard/operations-panel'
+import { AdvisorsPanel, type AdvisorRow } from '@/components/dashboard/advisors-panel'
 
 import { useTranslations } from 'next-intl'
 
@@ -63,6 +67,17 @@ export default function DashboardPage() {
 
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
+
+  // The operational block (phase 4): what needs attention right now,
+  // rather than how the month went. Counters come from one RPC; who is
+  // available comes from the advisors endpoint, which computes
+  // availability with the same module routing uses — never a second
+  // definition of "available".
+  const [operations, setOperations] = useState<OperationsMetrics | null>(null)
+  const [operationsLoading, setOperationsLoading] = useState(true)
+  const [advisors, setAdvisors] = useState<AdvisorRow[] | null>(null)
+  const [advisorsLoading, setAdvisorsLoading] = useState(true)
+  const [advisorsTimezone, setAdvisorsTimezone] = useState<string | null>(null)
 
   const loadAll = useCallback(() => {
     const db = createClient()
@@ -97,9 +112,32 @@ export default function DashboardPage() {
       .then((a) => setActivity(a))
       .catch((err) => console.error('[dashboard] activity failed:', err))
       .finally(() => setActivityLoading(false))
+
+    void loadOperations(db)
+      .then((o) => setOperations(o))
+      .catch((err) => console.error('[dashboard] operations failed:', err))
+      .finally(() => setOperationsLoading(false))
+
+    void fetch('/api/account/advisors')
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((json) => {
+        setAdvisors((json.advisors ?? []) as AdvisorRow[])
+        setAdvisorsTimezone((json.timezone as string | undefined) ?? null)
+      })
+      .catch((err) => console.error('[dashboard] advisors failed:', err))
+      .finally(() => setAdvisorsLoading(false))
   }, [])
 
   useEffect(() => {
+    loadAll()
+  }, [loadAll])
+
+  // The operations panel is the one widget worth re-reading mid-shift:
+  // it answers "is anyone waiting right now". Flipping the two flags
+  // back on first is what makes the button spin and the numbers dim.
+  const refreshOperations = useCallback(() => {
+    setOperationsLoading(true)
+    setAdvisorsLoading(true)
     loadAll()
   }, [loadAll])
 
@@ -129,6 +167,24 @@ export default function DashboardPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           {t('description')}
         </p>
+      </div>
+
+      {/* Operational block — the day, not the month. Sits above the
+          historical cards because it is the part someone acts on. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <div className="lg:col-span-3">
+          <OperationsPanel
+            data={operations}
+            loading={operationsLoading}
+            currency={defaultCurrency}
+            onRefresh={refreshOperations}
+          />
+        </div>
+        <AdvisorsPanel
+          advisors={advisors}
+          loading={advisorsLoading}
+          timezone={advisorsTimezone}
+        />
       </div>
 
       {/* Metric cards */}

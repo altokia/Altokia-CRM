@@ -6,6 +6,7 @@ import { Bell, Calendar, Check, Flame, X } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { useFormatter, useTranslations } from "next-intl";
 import { useLeadLabels } from "@/hooks/use-lead-labels";
+import { useTerm } from "@/hooks/use-term";
 
 interface DealCardProps {
   deal: Deal;
@@ -30,6 +31,11 @@ function initials(name?: string, fallback?: string) {
 
 export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
+  // The closed states are the two words a business is most likely to
+  // own: an academy closes deals as "Matriculado", a clinic as
+  // "Atendido". Falls back to the translation when nothing is set.
+  const tTerms = useTranslations("Terms");
+  const term = useTerm();
   const format = useFormatter();
   const labels = useLeadLabels();
   // Sampled once per mount so the overdue check stays pure during render.
@@ -72,13 +78,13 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         {deal.status === "won" && (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
             <Check className="h-3 w-3" />
-            {t("won")}
+            {term("won", tTerms("won"))}
           </span>
         )}
         {deal.status === "lost" && (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
             <X className="h-3 w-3" />
-            {t("lost")}
+            {term("lost", tTerms("lost"))}
           </span>
         )}
       </div>

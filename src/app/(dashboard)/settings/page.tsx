@@ -20,6 +20,7 @@ import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { CatalogManager } from '@/components/settings/catalog-manager';
 import { LabelsManager } from '@/components/settings/labels-manager';
+import { TerminologySettings } from '@/components/settings/terminology-settings';
 import {
   resolveSection,
   type SettingsSection,
@@ -79,6 +80,7 @@ function SettingsPageInner() {
     whatsapp: <WhatsAppConfig />,
     catalog: <CatalogManager />,
     labels: <LabelsManager />,
+    terminology: <TerminologySettings />,
     templates: <TemplateManager />,
     'quick-replies': <QuickRepliesManager />,
     fields: <FieldsAndTagsPanel />,

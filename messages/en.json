@@ -131,6 +131,74 @@
     },
     "emptyState": {
       "title": "Not enough data yet"
+    },
+    "operations": {
+      "title": "Today's operation",
+      "description": "What needs attention right now.",
+      "refresh": "Refresh",
+      "updated": "Updated at {time}",
+      "leads": {
+        "title": "Leads",
+        "newToday": "New today",
+        "open": "Open",
+        "highPriority": "High priority",
+        "followUpOverdue": "Overdue follow-ups",
+        "followUpToday": "Today's follow-ups",
+        "wonThisMonth": "{term} this month",
+        "byLabel": "By label",
+        "noLabels": "No labelled leads yet."
+      },
+      "conversations": {
+        "title": "Conversations",
+        "waitingForHuman": "Waiting for a person",
+        "aiActive": "Handled by the AI",
+        "humanActive": "With an advisor",
+        "unassignedWaiting": "Unassigned",
+        "longestWait": "Longest wait",
+        "minutes": "{count} min",
+        "none": "Nobody waiting"
+      },
+      "tasks": {
+        "title": "Tasks",
+        "open": "Open",
+        "pending": "Unassigned",
+        "overdue": "Overdue",
+        "dueToday": "Due today",
+        "byType": "By type",
+        "viewQueue": "View My work"
+      },
+      "ai": {
+        "title": "Assistant",
+        "repliesToday": "Replies today",
+        "conversationsHandledToday": "Conversations handled",
+        "handoffsToday": "Handoffs today",
+        "restricted": "Only visible to admins"
+      },
+      "actionTypes": {
+        "HUMAN_CHAT": "Take the chat",
+        "CALL": "Call",
+        "FOLLOW_UP": "Follow-up",
+        "APPOINTMENT": "Appointment",
+        "QUOTE": "Quote",
+        "REVIEW_REQUIRED": "Review",
+        "AI_CONTINUE": "AI continues",
+        "other": "Other"
+      },
+      "empty": "Metrics could not be loaded."
+    },
+    "advisors": {
+      "title": "{term} available",
+      "available": "Available",
+      "offShift": "Off shift",
+      "busy": "Busy",
+      "offline": "Offline",
+      "atCapacity": "At capacity",
+      "nobody": "Nobody is available right now.",
+      "nextShift": "Starts {time}",
+      "load": "{count} in progress",
+      "viewTeam": "View team",
+      "summary": "{available} of {total} available",
+      "unavailable": "Couldn't load the team."
     }
   },
   "Inbox": {
@@ -1583,7 +1651,8 @@
       "members": "Team members",
       "api": "API keys",
       "catalog": "Catalog",
-      "labels": "Lead labels"
+      "labels": "Lead labels",
+      "terminology": "Terminology"
     },
     "groups": {
       "account": "Account",
@@ -1952,6 +2021,37 @@
       "builtinHint": "Built-in labels cannot be deleted; rename them if you like.",
       "moveUp": "Move up",
       "moveDown": "Move down"
+    },
+    "terminology": {
+      "title": "How you name things",
+      "description": "Swap the CRM's words for the ones your business uses. It only changes what you see; your data stays where it is.",
+      "save": "Save",
+      "saved": "Terminology updated",
+      "saveError": "Could not save the terminology",
+      "reset": "Use the default word",
+      "defaultLabel": "Default: {value}",
+      "terms": {
+        "won": "Won customer",
+        "lost": "Lost customer",
+        "lead": "Lead",
+        "leads": "Leads (plural)",
+        "deal": "Deal",
+        "advisor": "Advisor",
+        "advisors": "Advisors (plural)",
+        "pipeline": "Pipeline",
+        "catalogItem": "Product or service"
+      },
+      "hints": {
+        "won": "What you call them once they close: Enrolled, Sold, Customer.",
+        "lost": "Dropped, Not interested, Lost.",
+        "lead": "Prospect, Enquiry, Applicant.",
+        "leads": "The plural of the one above.",
+        "deal": "Enrolment, Sale, Contract, Booking.",
+        "advisor": "Advisor, Sales rep, Agent, Doctor.",
+        "advisors": "The plural of the one above.",
+        "pipeline": "Pipeline, Process, Sales route.",
+        "catalogItem": "Course, Apartment, Treatment, Product."
+      }
     }
   },
   "MyWork": {
@@ -2054,5 +2154,16 @@
     "noDate": "No date found. Try: \"tomorrow at 10\", \"on Monday\", \"in 2 hours\".",
     "error": "Could not create the reminder",
     "hint": "Type it in your own words; the date is read automatically and the task lands in \"My work\"."
+  },
+  "Terms": {
+    "won": "Won",
+    "lost": "Lost",
+    "lead": "Lead",
+    "leads": "Leads",
+    "deal": "Deal",
+    "advisor": "Advisor",
+    "advisors": "Advisors",
+    "pipeline": "Pipeline",
+    "catalogItem": "Product"
   }
 }

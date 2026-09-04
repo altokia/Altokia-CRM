@@ -11,6 +11,7 @@ import type {
   ActivityItem,
   ConversationsSeriesPoint,
   MetricsBundle,
+  OperationsMetrics,
   PipelineDonutData,
   PipelineStageSlice,
   ResponseTimeBucket,
@@ -395,4 +396,101 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   return items
     .sort((a, b) => (a.at > b.at ? -1 : a.at < b.at ? 1 : 0))
     .slice(0, limit)
+}
+
+// --- 6. Operations snapshot -------------------------------------------
+//
+// The exception to the "aggregate client-side" note at the top of this
+// file: leads, conversations, tasks and AI usage all have to agree on
+// where "today" and "this month" start, and that boundary lives in
+// accounts.timezone — not in the server's clock and not in the browser's.
+// So `account_operations_metrics()` computes the whole snapshot in SQL
+// and hands back one JSONB object, which keeps it to a single round-trip.
+
+/**
+ * Normalise the RPC payload into the camelCase shape the dashboard
+ * consumes. Deliberately total: a missing section, a null, or a value of
+ * the wrong type degrades to 0 / [] / null instead of throwing, because a
+ * schema drift between this file and migration 044 should cost a wrong
+ * number on one card, not a blank dashboard.
+ */
+export function mapOperations(raw: unknown): OperationsMetrics {
+  const obj = (v: unknown): Record<string, unknown> =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? (v as Record<string, unknown>)
+      : {}
+  const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
+  // Postgres serialises `numeric` as a JSON *string* (won_value_this_month
+  // is a SUM(deals.value)), so everything goes through Number() — treating
+  // it as a number would silently concatenate or render "0".
+  const num = (v: unknown): number => {
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
+    return Number.isFinite(n) ? n : 0
+  }
+  // Same coercion, but "no samples" stays distinguishable from zero.
+  const nullableNum = (v: unknown): number | null => {
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
+    return Number.isFinite(n) ? n : null
+  }
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+
+  const root = obj(raw)
+  const leads = obj(root.leads)
+  const conversations = obj(root.conversations)
+  const tasks = obj(root.tasks)
+  const ai = obj(root.ai)
+
+  return {
+    leads: {
+      newToday: num(leads.new_today),
+      open: num(leads.open),
+      highPriority: num(leads.high_priority),
+      followUpOverdue: num(leads.follow_up_overdue),
+      followUpToday: num(leads.follow_up_today),
+      wonThisMonth: num(leads.won_this_month),
+      wonValueThisMonth: num(leads.won_value_this_month),
+      byLabel: list(leads.by_label).map((entry) => {
+        const label = obj(entry)
+        return {
+          key: str(label.key),
+          name: str(label.name),
+          color: str(label.color),
+          count: num(label.count),
+        }
+      }),
+    },
+    conversations: {
+      waitingForHuman: num(conversations.waiting_for_human),
+      aiActive: num(conversations.ai_active),
+      humanActive: num(conversations.human_active),
+      unassignedWaiting: num(conversations.unassigned_waiting),
+      longestWaitMinutes: nullableNum(conversations.longest_wait_minutes),
+    },
+    tasks: {
+      open: num(tasks.open),
+      pending: num(tasks.pending),
+      overdue: num(tasks.overdue),
+      dueToday: num(tasks.due_today),
+      byActionType: list(tasks.by_action_type).map((entry) => {
+        const row = obj(entry)
+        return { actionType: str(row.action_type), count: num(row.count) }
+      }),
+    },
+    ai: {
+      repliesToday: num(ai.replies_today),
+      handoffsToday: num(ai.handoffs_today),
+      conversationsHandledToday: num(ai.conversations_handled_today),
+      restricted: ai.restricted === true,
+    },
+    // UTC is the safe read of a missing zone: it is what Postgres itself
+    // falls back to, so the numbers and the label stay consistent.
+    timezone: str(root.timezone) || 'UTC',
+    generatedAt: str(root.generated_at),
+  }
+}
+
+export async function loadOperations(db: DB): Promise<OperationsMetrics> {
+  const { data, error } = await db.rpc('account_operations_metrics')
+  if (error) throw error
+  return mapOperations(data)
 }
