@@ -43,6 +43,24 @@ function InboxPageInner() {
    */
   const deepLinkConvId = searchParams.get("c");
 
+  /**
+   * Build an /inbox URL that only changes `?c=`. The conversation list
+   * keeps its ownership filter in the query string too (`?view=`), so
+   * rewriting the URL on every click with a bare `/inbox?c=<id>` would
+   * silently drop the agent's view — they'd land back on "All" the
+   * moment they opened a thread.
+   */
+  const inboxHref = useCallback(
+    (convId: string | null) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (convId) params.set("c", convId);
+      else params.delete("c");
+      const qs = params.toString();
+      return qs ? `/inbox?${qs}` : "/inbox";
+    },
+    [searchParams],
+  );
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] =
     useState<Conversation | null>(null);
@@ -483,9 +501,9 @@ function InboxPageInner() {
       // Reflect the selection in the URL so a refresh lands the user
       // back in the same thread, and so copy-paste links work. Use
       // replace() to avoid polluting browser history with every click.
-      router.replace(`/inbox?c=${conv.id}`, { scroll: false });
+      router.replace(inboxHref(conv.id), { scroll: false });
     },
-    [activeConversation?.id, router]
+    [activeConversation?.id, inboxHref, router]
   );
 
   // Mobile "back" — deselect the conversation so the list pane comes
@@ -498,8 +516,8 @@ function InboxPageInner() {
     // Clearing the ref lets the deep-link auto-selector fire again if
     // the user later visits /inbox?c=<same-id> — desirable UX.
     autoSelectedForDeepLinkRef.current = null;
-    router.replace("/inbox", { scroll: false });
-  }, [router]);
+    router.replace(inboxHref(null), { scroll: false });
+  }, [inboxHref, router]);
 
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {

@@ -14,6 +14,12 @@
     "noAccount": "¿No tienes una cuenta?",
     "createAccount": "Crear cuenta"
   },
+  "Auth": {
+    "accessRevoked": {
+      "title": "Tu acceso está suspendido",
+      "body": "Contacta con Altokia para reactivarlo."
+    }
+  },
   "Sidebar": {
     "title": "Plantilla de CRM para WhatsApp",
     "dashboard": "Panel",
@@ -184,6 +190,25 @@
         "AI_CONTINUE": "Sigue la IA",
         "other": "Otro"
       },
+      "worklist": {
+        "showing": "Mostrando {shown} de {total}",
+        "showMore": "Ver más",
+        "empty": "Ya no queda nada pendiente aquí.",
+        "error": "No se pudo cargar la lista.",
+        "unassigned": "Sin asignar",
+        "noContact": "Sin contacto",
+        "noDate": "Sin fecha"
+      },
+      "closers": {
+        "title": "Quién cerró este mes",
+        "vsLastMonth": "{count} y {value} vs. el mes pasado",
+        "sameAsLastMonth": "Igual que el mes pasado",
+        "none": "Todavía no hay cierres este mes.",
+        "unassigned": "Sin asignar",
+        "more": "y {count} más",
+        "unavailable": "No se pudo cargar el desglose de cierres.",
+        "partial": "Los importes cuentan solo los primeros {count} cierres de cada mes."
+      },
       "empty": "No se pudieron cargar las métricas."
     },
     "advisors": {
@@ -218,7 +243,21 @@
       "clearAll": "Limpiar todo",
       "noConversations": "No se encontraron conversaciones",
       "noMessagesYet": "Aún no hay mensajes",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "viewAll": "Todas",
+      "viewMine": "Mías",
+      "viewUnassigned": "Sin asignar",
+      "viewWaiting": "Esperando",
+      "agentPicker": "Asesor",
+      "anyAgent": "Cualquier asesor",
+      "agentUnknown": "Usuario desconocido",
+      "agentYou": "{name} (tú)",
+      "ownedBy": "La lleva {name}",
+      "ownedByYou": "La llevas tú",
+      "someoneElse": "otro usuario",
+      "unassignedTitle": "Sin asignar, libre para tomarla",
+      "waitingTitle": "Esperando a una persona",
+      "waitingBadge": "Espera"
     },
     "messageThread": {
       "backToConversations": "Volver a las conversaciones",
@@ -2171,6 +2210,69 @@
     "error": "No se pudo crear el recordatorio",
     "hint": "Escríbelo con tus palabras; la fecha se lee sola y la tarea aparece en «Mi trabajo»."
   },
+  "Notifications": {
+    "title": "Notificaciones",
+    "description": "Lo que el equipo y el sistema te dejan por atender.",
+    "unreadSummary": "{count, plural, =0 {Estás al día} =1 {1 aviso sin leer} other {# avisos sin leer}}",
+    "markAll": "Marcar todo como leído",
+    "markRead": "Marcar como leído",
+    "readState": "Leído",
+    "unreadState": "Sin leer",
+    "loading": "Cargando tus avisos…",
+    "contactLine": "Con {name}",
+    "due": "Vence {time}",
+    "overdue": "Venció {time}",
+    "filter": {
+      "all": "Todos",
+      "unread": "Sin leer"
+    },
+    "empty": {
+      "allTitle": "No tienes avisos",
+      "allBody": "Aquí te avisamos cuando te asignen una conversación o una tarea. Si está vacío, es que vas al día.",
+      "unreadTitle": "Nada por leer",
+      "unreadBody": "Ya revisaste todos tus avisos. Toca «Todos» para ver los anteriores."
+    },
+    "error": {
+      "title": "No pudimos cargar tus avisos",
+      "body": "Puede ser la conexión. Inténtalo de nuevo.",
+      "retry": "Reintentar"
+    },
+    "toast": {
+      "markReadFailed": "No se pudo marcar el aviso como leído",
+      "markAllFailed": "No se pudieron marcar los avisos como leídos"
+    },
+    "open": {
+      "conversation": "Abrir la conversación",
+      "work": "Ver en Mi trabajo",
+      "none": "Este aviso no lleva a ninguna pantalla"
+    },
+    "type": {
+      "conversation_assigned": {
+        "title": "Te asignaron una conversación",
+        "byActorWithContact": "{actor} te pasó la conversación con {contact}.",
+        "withContact": "Te pasaron la conversación con {contact}.",
+        "byActor": "{actor} te pasó una conversación.",
+        "generic": "Te pasaron una conversación."
+      },
+      "conversation_waiting": {
+        "title": "{term} esperando respuesta",
+        "withContact": "{contact} espera que alguien del equipo le conteste.",
+        "generic": "Hay una conversación esperando a una persona."
+      },
+      "task_assigned": {
+        "title": "Te asignaron una tarea"
+      },
+      "task_due": {
+        "title": "Se te venció una tarea"
+      },
+      "follow_up_due": {
+        "title": "Toca hacer un seguimiento"
+      },
+      "review_required": {
+        "title": "Hay una respuesta por revisar"
+      }
+    }
+  },
   "Terms": {
     "won": "Ganado",
     "lost": "Perdido",
@@ -2233,10 +2335,18 @@
       "ownerEmail": "Correo del dueño",
       "plan": "Plan",
       "timezone": "Zona horaria",
-      "submit": "Crear y generar invitación",
-      "done": "Cliente creado. Copia el enlace de invitación.",
+      "submit": "Crear cuenta y credenciales",
+      "done": "Cliente creado. Copia las credenciales: la contraseña no se vuelve a mostrar.",
       "copyLink": "Copiar enlace",
-      "linkHint": "El dueño abre este enlace, crea su clave y entra a su CRM."
+      "linkHint": "El dueño abre este enlace, crea su clave y entra a su CRM.",
+      "ownerName": "Nombre de la persona",
+      "password": "Contraseña",
+      "generate": "Generar una segura",
+      "credentials": "Credenciales de acceso",
+      "copyAll": "Copiar usuario y contraseña",
+      "loginUrl": "Dirección para entrar",
+      "warning": "Guárdala ahora. Por seguridad no la almacenamos y no podrás volver a verla.",
+      "emailTaken": "Ese correo ya tiene una cuenta."
     },
     "detail": {
       "health": "Salud",
@@ -2305,7 +2415,44 @@
     },
     "errors": {
       "generic": "Algo salió mal",
-      "notOperator": "No tienes acceso a esta consola."
+      "notOperator": "No tienes acceso a esta consola.",
+      "weakPassword": "La contraseña debe tener al menos 10 caracteres."
+    },
+    "plan": {
+      "title": "Plan",
+      "none": "Sin plan",
+      "change": "Cambiar plan",
+      "includes": "Incluye",
+      "limits": {
+        "seats": "Personas en el equipo",
+        "contacts": "Contactos",
+        "ai_replies_per_month": "Respuestas de IA al mes",
+        "knowledge_documents": "Documentos de conocimiento",
+        "catalog_items": "Artículos del catálogo"
+      },
+      "unlimited": "Sin límite",
+      "usage": "{used} de {limit}",
+      "saved": "Plan actualizado"
+    },
+    "credentials": {
+      "title": "Acceso del cliente",
+      "owner": "Entra con",
+      "issuedByUs": "Credenciales creadas por Altokia el {date}",
+      "selfSignup": "El cliente se registró por su cuenta",
+      "reset": "Cambiar contraseña",
+      "resetTitle": "Nueva contraseña para {email}",
+      "resetWarning": "La sesión abierta del cliente se cerrará y tendrá que entrar con la nueva.",
+      "resetDone": "Contraseña cambiada. Cópiala ahora.",
+      "revoke": "Quitar acceso",
+      "revokeTitle": "Quitar el acceso a {name}",
+      "revokeWarning": "Nadie de esa empresa podrá entrar hasta que le devuelvas el acceso. Sus datos no se tocan.",
+      "revokeReason": "Motivo",
+      "revoked": "Acceso retirado el {date}",
+      "revokedBecause": "Motivo: {reason}",
+      "restore": "Devolver el acceso",
+      "restored": "Acceso devuelto",
+      "members": "{count} {count, plural, =1 {persona con acceso} other {personas con acceso}}",
+      "noAccess": "Sin acceso"
     }
   }
 }

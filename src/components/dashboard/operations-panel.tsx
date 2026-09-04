@@ -1,17 +1,29 @@
 "use client"
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
-import { Bot, ListChecks, MessagesSquare, RefreshCw, TriangleAlert, Users } from 'lucide-react'
+import {
+  Bot,
+  ChevronRight,
+  ListChecks,
+  MessagesSquare,
+  RefreshCw,
+  TriangleAlert,
+  Users,
+} from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
 import type { OperationsMetrics } from '@/lib/dashboard/types'
+import type { WorklistKey } from '@/lib/dashboard/worklist'
 import { TASK_ACTION_TYPES } from '@/types'
 import { formatCurrency } from '@/lib/currency'
 import { isValidTimeZone } from '@/lib/availability'
 import { useTerm } from '@/hooks/use-term'
 import { cn } from '@/lib/utils'
+import { ClosersBreakdown } from './closers-breakdown'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
+import { WorklistSheet, type WorklistRequest } from './worklist-sheet'
 
 /**
  * Operations panel — "what needs a person right now", in four dense
@@ -23,6 +35,10 @@ import { Skeleton } from './skeleton'
  * assistant activity read the same for a clinic, an agency or a shop.
  * Every word that a business would rename (won, advisor) arrives as an
  * i18n variable, never baked into a label.
+ *
+ * Every counter that represents pending work opens the list behind it
+ * (see WorklistSheet): a red "7" that cannot be clicked tells an
+ * operator that something is wrong and nothing about what to do next.
  */
 
 /**
@@ -67,6 +83,23 @@ export function OperationsPanel({ data, loading, currency, onRefresh }: Operatio
   const format = useFormatter()
 
   const wonTerm = term('won', tTerms('won'))
+
+  // Two pieces of state rather than one: `request` outlives `sheetOpen`
+  // so the sheet keeps its contents while it animates closed. The nonce
+  // changes on every open, which remounts the list body and re-reads it
+  // — a queue that is three minutes stale is worse than no queue.
+  const [request, setRequest] = useState<WorklistRequest | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+
+  const openWorklist = (key: WorklistKey, title: string) => {
+    setRequest((prev) => ({ key, title, nonce: (prev?.nonce ?? 0) + 1 }))
+    setSheetOpen(true)
+  }
+
+  // Only worth opening when there is something in it; a counter at zero
+  // stays a plain row, so a calm board has nothing to click.
+  const opener = (key: WorklistKey, title: string, count: number) =>
+    count > 0 ? () => openWorklist(key, title) : undefined
 
   // Zero-count labels say nothing in a dense card; the biggest bucket
   // first is what an operator looks for. `filter` already copies, so the
@@ -167,6 +200,16 @@ export function OperationsPanel({ data, loading, currency, onRefresh }: Operatio
                     </ul>
                   </>
                 )}
+                {/* Who closed, and whether the month is up or down. It
+                    belongs under the won counter it explains, not in a
+                    card of its own. */}
+                <div className="mt-3 border-t border-border pt-3">
+                  <ClosersBreakdown
+                    timezone={data.timezone}
+                    refreshKey={data.generatedAt}
+                    currency={currency}
+                  />
+                </div>
               </>
             }
           >
@@ -180,6 +223,11 @@ export function OperationsPanel({ data, loading, currency, onRefresh }: Operatio
               label={t('leads.followUpOverdue')}
               value={format.number(data.leads.followUpOverdue)}
               alert={data.leads.followUpOverdue > 0}
+              onOpen={opener(
+                'lead_followups_overdue',
+                t('leads.followUpOverdue'),
+                data.leads.followUpOverdue,
+              )}
             />
             <Stat
               label={t('leads.followUpToday')}
@@ -197,11 +245,21 @@ export function OperationsPanel({ data, loading, currency, onRefresh }: Operatio
               label={t('conversations.waitingForHuman')}
               value={format.number(data.conversations.waitingForHuman)}
               alert={data.conversations.waitingForHuman > 0}
+              onOpen={opener(
+                'conversations_waiting',
+                t('conversations.waitingForHuman'),
+                data.conversations.waitingForHuman,
+              )}
             />
             <Stat
               label={t('conversations.unassignedWaiting')}
               value={format.number(data.conversations.unassignedWaiting)}
               alert={data.conversations.unassignedWaiting > 0}
+              onOpen={opener(
+                'conversations_unassigned',
+                t('conversations.unassignedWaiting'),
+                data.conversations.unassignedWaiting,
+              )}
             />
             <Stat
               label={t('conversations.aiActive')}
@@ -267,6 +325,7 @@ export function OperationsPanel({ data, loading, currency, onRefresh }: Operatio
               label={t('tasks.overdue')}
               value={format.number(data.tasks.overdue)}
               alert={data.tasks.overdue > 0}
+              onOpen={opener('tasks_overdue', t('tasks.overdue'), data.tasks.overdue)}
             />
             <Stat label={t('tasks.dueToday')} value={format.number(data.tasks.dueToday)} />
           </Block>
@@ -296,6 +355,8 @@ export function OperationsPanel({ data, loading, currency, onRefresh }: Operatio
           </Block>
         </div>
       )}
+
+      <WorklistSheet open={sheetOpen} request={request} onOpenChange={setSheetOpen} />
     </section>
   )
 }
@@ -337,22 +398,30 @@ function Block({
  * counters that mean "someone is waiting" turn red only when they are
  * above zero, so a calm board is genuinely calm and a red row is worth
  * walking over to.
+ *
+ * With `onOpen` the row becomes a button that opens the records behind
+ * the number. The chevron is the only visual difference — a row that
+ * looks like the others but behaves differently would be worse than no
+ * affordance at all.
  */
 function Stat({
   label,
   value,
   alert = false,
   sub,
+  onOpen,
 }: {
   label: string
   value: string
   alert?: boolean
   /** Secondary value shown to the left of the count (e.g. won value). */
   sub?: string
+  /** Opens the list behind the counter. Omitted when there is nothing to open. */
+  onOpen?: () => void
 }) {
   const tone = alert ? 'text-red-600 dark:text-red-400' : null
-  return (
-    <div className="flex items-baseline justify-between gap-3">
+  const content = (
+    <>
       <span className={cn('min-w-0 truncate text-xs', tone ?? 'text-muted-foreground')}>
         {label}
       </span>
@@ -361,8 +430,33 @@ function Stat({
         <span className={cn('text-sm font-semibold tabular-nums', tone ?? 'text-foreground')}>
           {value}
         </span>
+        {onOpen ? (
+          <ChevronRight
+            className={cn(
+              'h-3.5 w-3.5 self-center transition-transform group-hover:translate-x-0.5',
+              tone ?? 'text-muted-foreground',
+            )}
+            aria-hidden
+          />
+        ) : null}
       </span>
-    </div>
+    </>
+  )
+
+  if (!onOpen) {
+    return <div className="flex items-baseline justify-between gap-3">{content}</div>
+  }
+  // The negative margin lets the hover band bleed into the card's own
+  // padding, so an openable row's label still lines up with the plain
+  // rows above it instead of sitting 4px in.
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group -mx-1 flex w-[calc(100%+0.5rem)] items-baseline justify-between gap-3 rounded-md px-1 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      {content}
+    </button>
   )
 }
 

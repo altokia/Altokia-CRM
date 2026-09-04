@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ChatMessage } from './types'
 import { aiContextMessageLimit } from './defaults'
+import { ALWAYS_ON_KINDS } from './knowledge-kinds'
 
 interface DbMessage {
   sender_type: 'customer' | 'agent' | 'bot'
@@ -141,7 +142,10 @@ export async function loadBusinessProfile(
       .from('ai_knowledge_documents')
       .select('kind, title, content')
       .eq('account_id', accountId)
-      .in('kind', ['description', 'hours', 'location', 'payment'])
+      // Read from the one list that defines them (knowledge-kinds.ts):
+      // a hand-copied duplicate meant adding an always-on kind there
+      // would silently never reach the prompt.
+      .in('kind', [...ALWAYS_ON_KINDS])
       .order('kind', { ascending: true })
       .limit(limit)
     return (data ?? []).map((d) => `${d.title}: ${String(d.content).trim().slice(0, 600)}`)

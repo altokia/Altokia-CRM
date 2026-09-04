@@ -1,15 +1,23 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   CONVERSATION_SELECT,
   matchesContactFilters,
   normalizeConversations,
 } from "@/lib/inbox/conversations";
+import { fetchAccountMembers, memberLabel } from "@/lib/account/members";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X } from "lucide-react";
+import type {
+  AccountMember,
+  Conversation,
+  ConversationStatus,
+  Tag,
+} from "@/types";
+import { Search, ChevronDown, X, Clock, User } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -46,6 +54,32 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 type InboxFilter = ConversationStatus | "all" | "unread";
 
+/**
+ * Ownership slice of the inbox, kept in `?view=` so an agent's view
+ * survives a reload and can be pasted to a teammate.
+ *
+ * Anything in that param that isn't one of these keywords is read as a
+ * teammate's user id (the "specific advisor" picker below). Matching on
+ * the raw id — instead of validating it against the member list — means
+ * a shared link filters correctly even before the members request lands.
+ */
+const OWNER_VIEWS = ["all", "mine", "unassigned", "waiting"] as const;
+type OwnerView = (typeof OWNER_VIEWS)[number];
+
+function isOwnerView(value: string | null): value is OwnerView {
+  return value !== null && (OWNER_VIEWS as readonly string[]).includes(value);
+}
+
+/** Up to two initials for the assignee bubble on a row. */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return parts
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join("");
+}
+
 export function ConversationList({
   activeConversationId,
   onSelect,
@@ -54,7 +88,12 @@ export function ConversationList({
   resyncToken = 0,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
-  
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const myId = user?.id ?? null;
+
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterAll"), value: "all" },
     { label: t("filterUnread"), value: "unread" },
@@ -62,6 +101,54 @@ export function ConversationList({
     { label: t("filterPending"), value: "pending" },
     { label: t("filterClosed"), value: "closed" },
   ], [t]);
+
+  const OWNER_TABS: { label: string; value: OwnerView }[] = useMemo(() => [
+    { label: t("viewAll"), value: "all" },
+    { label: t("viewMine"), value: "mine" },
+    { label: t("viewUnassigned"), value: "unassigned" },
+    { label: t("viewWaiting"), value: "waiting" },
+  ], [t]);
+
+  // Ownership filter lives in the URL, not in state: the agent keeps their
+  // slice across reloads and can share it as a link (issue: nobody could
+  // isolate "my chats" in a multi-advisor account).
+  const viewParam = searchParams.get("view");
+  const ownerView: OwnerView = isOwnerView(viewParam) ? viewParam : "all";
+  const agentFilter = viewParam && !isOwnerView(viewParam) ? viewParam : null;
+
+  const setOwnerView = useCallback(
+    (next: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      // "all" is the default — keep it out of the URL so the plain
+      // /inbox link stays clean, and preserve `?c=` (the open thread).
+      if (next === "all") params.delete("view");
+      else params.set("view", next);
+      const qs = params.toString();
+      // replace(), not push(): flipping a filter shouldn't fill the back button.
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  // Account members power both the advisor picker and the per-row owner
+  // bubble. Best-effort by design: fetchAccountMembers resolves to [] on
+  // failure, which leaves the picker hidden and rows on a neutral bubble.
+  const [members, setMembers] = useState<AccountMember[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchAccountMembers().then((m) => {
+      if (!cancelled) setMembers(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const membersById = useMemo(() => {
+    const m = new Map<string, AccountMember>();
+    for (const member of members) m.set(member.user_id, member);
+    return m;
+  }, [members]);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
@@ -158,7 +245,10 @@ export function ConversationList({
     return m;
   }, [tags]);
 
-  const filtered = useMemo(() => {
+  // Everything except the ownership slice. Split out so the tab counts
+  // below can be read off the same list the tabs switch between — the
+  // number next to a tab always matches what clicking it shows.
+  const baseFiltered = useMemo(() => {
     let result = conversations;
 
     if (filter === "unread") {
@@ -190,6 +280,50 @@ export function ConversationList({
     return result;
   }, [conversations, filter, search, selectedTagIds, selectedCompany]);
 
+  // One pass over the rows already in memory — no extra query. `mine` is
+  // null (badge hidden) until the session resolves: a missing number is
+  // honest, a "0" would read as "you have nothing".
+  const ownerCounts = useMemo(() => {
+    let mine = 0;
+    let unassigned = 0;
+    let waiting = 0;
+    for (const c of baseFiltered) {
+      if (myId && c.assigned_agent_id === myId) mine++;
+      if (!c.assigned_agent_id) unassigned++;
+      if (c.handoff_state === "waiting_for_human") waiting++;
+    }
+    return {
+      all: baseFiltered.length,
+      mine: myId ? mine : null,
+      unassigned,
+      waiting,
+    };
+  }, [baseFiltered, myId]);
+
+  // Ownership slice, applied in memory like every other inbox filter —
+  // the list already holds the account's conversations, so this costs a
+  // pass over an array instead of a round-trip.
+  const filtered = useMemo(() => {
+    if (agentFilter) {
+      return baseFiltered.filter((c) => c.assigned_agent_id === agentFilter);
+    }
+    switch (ownerView) {
+      case "mine":
+        // No session yet → show nothing rather than everyone's threads.
+        return myId
+          ? baseFiltered.filter((c) => c.assigned_agent_id === myId)
+          : [];
+      case "unassigned":
+        return baseFiltered.filter((c) => !c.assigned_agent_id);
+      case "waiting":
+        return baseFiltered.filter(
+          (c) => c.handoff_state === "waiting_for_human",
+        );
+      default:
+        return baseFiltered;
+    }
+  }, [baseFiltered, ownerView, agentFilter, myId]);
+
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
@@ -219,6 +353,14 @@ export function ConversationList({
 
   const activeFilter = FILTER_OPTIONS.find((o) => o.value === filter);
 
+  // A filtered-by id we can't resolve to a member (left the account, or
+  // the members request failed) still filters correctly — we just can't
+  // put a name on it, and say so instead of guessing one.
+  const agentFilterMember = agentFilter ? membersById.get(agentFilter) : undefined;
+  const agentFilterLabel = agentFilter
+    ? (agentFilterMember ? memberLabel(agentFilterMember) : t("agentUnknown"))
+    : t("agentPicker");
+
   return (
     // w-full on mobile so the list occupies the whole viewport when it's
     // the single pane showing; fixed 320px on desktop where it shares the
@@ -234,6 +376,104 @@ export function ConversationList({
             placeholder={t("searchPlaceholder")}
             className="border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50"
           />
+        </div>
+
+        {/* Who has the thread. Separate row from the status/tag chips
+            below because it answers a different question — "whose work is
+            this", not "what state is it in" — and it's the one an agent
+            flips constantly. */}
+        <div className="flex flex-wrap items-center gap-1">
+          <div className="flex flex-wrap items-center gap-0.5 rounded-md bg-muted/60 p-0.5">
+            {OWNER_TABS.map((tab) => {
+              // The advisor picker owns the highlight while it's set: the
+              // tabs and the picker are the same axis, not two filters.
+              const isActive = !agentFilter && ownerView === tab.value;
+              const count = ownerCounts[tab.value];
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setOwnerView(tab.value)}
+                  aria-pressed={isActive}
+                  // The label is short so four tabs fit the 320px column;
+                  // the tooltip carries the full meaning.
+                  title={tab.value === "waiting" ? t("waitingTitle") : undefined}
+                  className={cn(
+                    "inline-flex h-6 items-center gap-1 rounded px-2 text-[11px] transition-colors",
+                    isActive
+                      ? "bg-background font-medium text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {tab.label}
+                  {count !== null && (
+                    <span
+                      className={cn(
+                        "tabular-nums",
+                        // Anything waiting on a person is money on the
+                        // table — keep the number warm even unselected.
+                        tab.value === "waiting" && count > 0
+                          ? "font-semibold text-amber-700 dark:text-amber-400"
+                          : "text-muted-foreground/70",
+                      )}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Only worth showing with teammates to pick from — or when a
+              shared link already points at one, so it can be cleared. */}
+          {(members.length > 1 || agentFilter) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  "inline-flex max-w-40 items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                  agentFilter
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span className="truncate">{agentFilterLabel}</span>
+                <ChevronDown className="h-3 w-3 shrink-0" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="max-h-64 w-56 border-border bg-popover"
+              >
+                <DropdownMenuItem
+                  onClick={() => setOwnerView("all")}
+                  className={cn(
+                    "text-sm",
+                    agentFilter ? "text-popover-foreground" : "text-primary",
+                  )}
+                >
+                  {t("anyAgent")}
+                </DropdownMenuItem>
+                {members.map((m) => (
+                  <DropdownMenuItem
+                    key={m.user_id}
+                    onClick={() => setOwnerView(m.user_id)}
+                    className={cn(
+                      "text-sm",
+                      agentFilter === m.user_id
+                        ? "text-primary"
+                        : "text-popover-foreground",
+                    )}
+                  >
+                    <span className="truncate">
+                      {m.user_id === myId
+                        ? t("agentYou", { name: memberLabel(m) })
+                        : memberLabel(m)}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
@@ -412,6 +652,14 @@ export function ConversationList({
                 key={conv.id}
                 conversation={conv}
                 isActive={conv.id === activeConversationId}
+                owner={
+                  conv.assigned_agent_id
+                    ? (membersById.get(conv.assigned_agent_id) ?? null)
+                    : null
+                }
+                isOwnedByMe={
+                  !!myId && conv.assigned_agent_id === myId
+                }
                 onSelect={handleSelect}
                 t={t}
               />
@@ -426,6 +674,10 @@ export function ConversationList({
 interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
+  /** Account member holding the thread; null when unassigned OR when the
+   *  assignee id doesn't resolve to a member we know about. */
+  owner: AccountMember | null;
+  isOwnedByMe: boolean;
   onSelect: (conversation: Conversation) => void;
   t: ReturnType<typeof useTranslations>;
 }
@@ -433,12 +685,28 @@ interface ConversationItemProps {
 function ConversationItem({
   conversation,
   isActive,
+  owner,
+  isOwnedByMe,
   onSelect,
   t,
 }: ConversationItemProps) {
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || t("unknown");
   const initials = displayName.charAt(0).toUpperCase();
+
+  // Two rows can't be worked twice by accident if the list says who has
+  // each one. Kept to a bubble + title so the row doesn't get louder.
+  const assignedAgentId = conversation.assigned_agent_id ?? null;
+  const ownerName = owner ? memberLabel(owner) : null;
+  const ownerTitle = !assignedAgentId
+    ? t("unassignedTitle")
+    : isOwnedByMe
+      ? t("ownedByYou")
+      : t("ownedBy", { name: ownerName ?? t("someoneElse") });
+
+  // The customer is waiting on a person — the state that costs money and
+  // had no signal anywhere in the list until now.
+  const isWaiting = conversation.handoff_state === "waiting_for_human";
 
   const handleClick = useCallback(() => {
     onSelect(conversation);
@@ -455,6 +723,9 @@ function ConversationItem({
       onClick={handleClick}
       className={cn(
         "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
+        // Warm tint for threads waiting on a person, so they stand out
+        // while scanning. The active row keeps its own background.
+        isWaiting && !isActive && "bg-amber-500/5",
         isActive && "border-l-2 border-primary bg-muted/70"
       )}
     >
@@ -477,13 +748,55 @@ function ConversationItem({
           <span className="truncate text-sm font-medium text-foreground">
             {displayName}
           </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Owner bubble. Assigned → initials (or photo); free →
+                a dashed outline, so an unclaimed thread reads as an
+                empty slot rather than as missing information. */}
+            {assignedAgentId ? (
+              <span
+                title={ownerTitle}
+                className={cn(
+                  "flex h-5 w-5 items-center justify-center overflow-hidden rounded-full text-[9px] font-semibold",
+                  isOwnedByMe
+                    ? "bg-primary/15 text-primary"
+                    : "bg-muted text-muted-foreground ring-1 ring-border"
+                )}
+              >
+                {owner?.avatar_url ? (
+                  <img
+                    src={owner.avatar_url}
+                    alt={ownerName ?? ""}
+                    className="h-5 w-5 object-cover"
+                  />
+                ) : (
+                  initialsOf(ownerName ?? "?")
+                )}
+              </span>
+            ) : (
+              <span
+                title={ownerTitle}
+                className="flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground/70"
+              >
+                <User className="h-2.5 w-2.5" />
+              </span>
+            )}
+            <span className="text-[10px] text-muted-foreground">{timeAgo}</span>
+          </div>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <p className="truncate text-xs text-muted-foreground">
             {conversation.last_message_text || t("noMessagesYet")}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
+            {isWaiting && (
+              <span
+                title={t("waitingTitle")}
+                className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+              >
+                <Clock className="h-2.5 w-2.5" />
+                {t("waitingBadge")}
+              </span>
+            )}
             {conversation.unread_count > 0 && (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
                 {conversation.unread_count}
