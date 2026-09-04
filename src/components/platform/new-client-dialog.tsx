@@ -1,13 +1,19 @@
 'use client';
 
 // ============================================================
-// Provisioning a new business.
+// Provisioning a business, cold.
 //
-// The dialog has two faces. The first collects what the route needs;
-// the second shows the invite link, once. There is no "show it again"
-// button because the console genuinely cannot produce one — so the
-// panel says out loud what the link is for and who opens it, and the
-// only way out is closing the dialog deliberately.
+// The customer does not sign up. Altokia creates the login, sets the
+// password and hands over credentials that already work — so this
+// dialog asks for the person as well as the company, and produces a
+// working account rather than an invitation to make one.
+//
+// Two faces. The first collects what the route needs; the second is
+// the only time the password is ever visible, which is why the dialog
+// says so in as many words instead of letting the operator find out
+// later. Closing wipes both faces: the password exists in this
+// component's state and nowhere else — not in storage, not in the
+// URL, not in the audit log the route writes.
 // ============================================================
 
 import { useState } from 'react';
@@ -26,8 +32,16 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CopyField } from './copy-field';
-import { platformPost, type CreateAccountResponse } from './platform-api';
+import { CredentialsPanel } from './credentials-panel';
+import { MIN_PASSWORD_LENGTH, PasswordField } from './password-field';
+import { PlanIncludes, PlanSelect } from './plan-select';
+import { usePlans } from './use-plans';
+import {
+  platformPost,
+  PlatformRequestError,
+  type CreateAccountResponse,
+  type IssuedCredentials,
+} from './platform-api';
 
 export function NewClientDialog({
   open,
@@ -39,23 +53,33 @@ export function NewClientDialog({
   onCreated: () => void;
 }) {
   const t = useTranslations('Platform');
+  const { selectable, find, loading } = usePlans();
 
   const [name, setName] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
-  const [plan, setPlan] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [password, setPassword] = useState('');
+  const [plan, setPlan] = useState<string | null>(null);
   const [timezone, setTimezone] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [issued, setIssued] = useState<IssuedCredentials | null>(null);
 
-  const ready = name.trim().length > 0 && ownerEmail.trim().length > 0;
+  // An empty password is allowed: the route picks one and returns it,
+  // and the panel shows whichever of the two the server settled on.
+  const passwordOk =
+    password.length === 0 || password.length >= MIN_PASSWORD_LENGTH;
+  const ready =
+    name.trim().length > 0 && ownerEmail.trim().length > 0 && passwordOk;
 
   function reset() {
     setName('');
     setOwnerEmail('');
-    setPlan('');
+    setOwnerName('');
+    setPassword('');
+    setPlan(null);
     setTimezone('');
     setSubmitting(false);
-    setInviteUrl(null);
+    setIssued(null);
   }
 
   async function submit() {
@@ -67,15 +91,42 @@ export function NewClientDialog({
         {
           name: name.trim(),
           owner_email: ownerEmail.trim(),
-          plan: plan.trim() || undefined,
+          owner_name: ownerName.trim() || undefined,
+          password: password || undefined,
+          plan: plan ?? undefined,
           timezone: timezone.trim() || undefined,
         },
       );
-      setInviteUrl(data.invite_url);
+
       onCreated();
+
+      if (data.credentials?.password) {
+        // Everything the form held goes now; only `issued` survives,
+        // and only until the dialog closes.
+        setName('');
+        setOwnerEmail('');
+        setOwnerName('');
+        setPassword('');
+        setTimezone('');
+        setIssued(data.credentials);
+      } else {
+        // The account exists but the response carried no password to
+        // show. Saying nothing would be worse than saying so.
+        toast.error(t('errors.generic'));
+        reset();
+        onOpenChange(false);
+      }
     } catch (err) {
       console.error('[platform-console] create client failed:', err);
-      toast.error(err instanceof Error ? err.message : t('errors.generic'));
+      const conflict =
+        err instanceof PlatformRequestError && err.status === 409;
+      toast.error(
+        conflict
+          ? t('new.emailTaken')
+          : err instanceof Error
+            ? err.message
+            : t('errors.generic'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -89,20 +140,19 @@ export function NewClientDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('new.title')}</DialogTitle>
-          {inviteUrl ? (
+          {issued ? (
             <DialogDescription>{t('new.done')}</DialogDescription>
           ) : null}
         </DialogHeader>
 
-        {inviteUrl ? (
-          <CopyField
-            id="platform-invite-url"
-            value={inviteUrl}
-            copyLabel={t('new.copyLink')}
-            hint={t('new.linkHint')}
+        {issued ? (
+          <CredentialsPanel
+            email={issued.email}
+            password={issued.password}
+            loginUrl={issued.login_url}
           />
         ) : (
           <>
@@ -131,31 +181,51 @@ export function NewClientDialog({
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="platform-new-plan">{t('new.plan')}</Label>
-                  <Input
-                    id="platform-new-plan"
-                    value={plan}
-                    maxLength={60}
-                    onChange={(e) => setPlan(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="platform-new-tz">{t('new.timezone')}</Label>
-                  <Input
-                    id="platform-new-tz"
-                    value={timezone}
-                    maxLength={60}
-                    onChange={(e) => setTimezone(e.target.value)}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="platform-new-owner-name">
+                  {t('new.ownerName')}
+                </Label>
+                <Input
+                  id="platform-new-owner-name"
+                  value={ownerName}
+                  maxLength={120}
+                  autoComplete="off"
+                  onChange={(e) => setOwnerName(e.target.value)}
+                />
+              </div>
+
+              <PasswordField
+                id="platform-new-password"
+                value={password}
+                onChange={setPassword}
+              />
+
+              <PlanSelect
+                id="platform-new-plan"
+                label={t('new.plan')}
+                value={plan}
+                plans={selectable}
+                disabled={loading}
+                onChange={setPlan}
+              />
+
+              <PlanIncludes plan={find(plan)} />
+
+              <div className="space-y-1.5">
+                <Label htmlFor="platform-new-tz">{t('new.timezone')}</Label>
+                <Input
+                  id="platform-new-tz"
+                  value={timezone}
+                  maxLength={60}
+                  onChange={(e) => setTimezone(e.target.value)}
+                />
               </div>
             </div>
 
             <DialogFooter>
               <Button
                 variant="outline"
+                disabled={submitting}
                 onClick={() => {
                   reset();
                   onOpenChange(false);

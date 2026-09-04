@@ -94,8 +94,18 @@ export interface AccountContext {
    * what they are paying for, and to fix whatever caused it) but may
    * not send. Enforce it with `assertAccountActive`, never by hiding
    * the data.
+   *
+   * `accessRevokedAt` (050) is the other axis entirely: not "what may
+   * this customer do", but "may these people get in at all". See
+   * `assertAccountAccess`.
    */
-  account: { id: string; name: string; status: AccountStatus };
+  account: {
+    id: string;
+    name: string;
+    status: AccountStatus;
+    /** ISO timestamp, or null when access is intact. */
+    accessRevokedAt: string | null;
+  };
 }
 
 export const ACCOUNT_STATUSES = ['trial', 'active', 'suspended', 'cancelled'] as const;
@@ -106,6 +116,15 @@ function isAccountStatus(value: unknown): value is AccountStatus {
     typeof value === "string" &&
     (ACCOUNT_STATUSES as readonly string[]).includes(value)
   );
+}
+
+/**
+ * True for the two ways PostgREST reports "you selected a column that
+ * does not exist": Postgres' own 42703, and PGRST204 from the schema
+ * cache. Narrow on purpose — any other failure must stay fatal.
+ */
+function isMissingColumnError(err: { code?: string } | null): boolean {
+  return err?.code === "42703" || err?.code === "PGRST204";
 }
 
 /**
@@ -123,6 +142,38 @@ export function assertAccountActive(ctx: AccountContext): void {
     status === "suspended"
       ? "This account is suspended. Sending is disabled until it is reactivated."
       : "This account is cancelled. Sending is disabled.",
+  );
+}
+
+/**
+ * Refuse *everything* when Altokia has pulled this client's access.
+ *
+ * How this differs from `assertAccountActive`, because the two look
+ * alike and are not:
+ *
+ *   suspended (status)      — commercial. The customer still reads
+ *                             their own inbox, contacts and history;
+ *                             they just cannot send. Losing sight of
+ *                             their own data over an unpaid invoice
+ *                             would be punitive and unhelpful.
+ *   revoked (access_revoked_at) — nobody from that company signs in.
+ *                             The data is untouched and comes straight
+ *                             back when access is restored, but while
+ *                             it is revoked there is no reading either.
+ *
+ * The real enforcement is the ban on the auth users themselves (050),
+ * applied by the platform console, so a revoked user never gets a
+ * session to reach this code with. This is the second barrier: it
+ * catches a session minted moments before the ban, and any path where
+ * the auth-side ban did not land — a partial failure in the console, an
+ * extra member added after the revocation, a service that authenticates
+ * some other way. Call it wherever a request would otherwise act on
+ * account data, alongside (not instead of) the role check.
+ */
+export function assertAccountAccess(ctx: AccountContext): void {
+  if (!ctx.account.accessRevokedAt) return;
+  throw new ForbiddenError(
+    "Access to this account has been withdrawn. Contact Altokia to restore it.",
   );
 }
 
@@ -182,11 +233,27 @@ export async function getCurrentAccount(): Promise<AccountContext> {
   // and takes down the entire account context (issue #294). A lookup by
   // id needs no relationship inference and is gated by the same accounts
   // RLS, so it stays robust against cache staleness and older schemas.
-  const { data: account, error: accountErr } = await supabase
+  let { data: account, error: accountErr } = await supabase
     .from("accounts")
-    .select("id, name, status")
+    .select("id, name, status, access_revoked_at")
     .eq("id", data.account_id)
     .maybeSingle();
+
+  // `access_revoked_at` arrives with migration 050. A deployment whose
+  // code is ahead of its database would get PGRST204/42703 here and, via
+  // the throw below, lock every user of every account out of the entire
+  // app over a column that only ever adds a restriction. Retry once
+  // without it; a missing column simply means nobody is revoked yet.
+  if (accountErr && isMissingColumnError(accountErr)) {
+    console.warn(
+      "[getCurrentAccount] accounts.access_revoked_at missing — is migration 050 applied?",
+    );
+    ({ data: account, error: accountErr } = await supabase
+      .from("accounts")
+      .select("id, name, status")
+      .eq("id", data.account_id)
+      .maybeSingle());
+  }
 
   if (accountErr) {
     console.error("[getCurrentAccount] account fetch error:", accountErr);
@@ -210,6 +277,12 @@ export async function getCurrentAccount(): Promise<AccountContext> {
       id: account.id,
       name: account.name,
       status: isAccountStatus(account.status) ? account.status : "active",
+      // Absent on a pre-050 database (see the retry above), where the
+      // honest answer is "nobody has been revoked".
+      accessRevokedAt:
+        typeof account.access_revoked_at === "string"
+          ? account.access_revoked_at
+          : null,
     },
   };
 }

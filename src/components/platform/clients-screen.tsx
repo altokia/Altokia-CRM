@@ -17,7 +17,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
-import { AlertTriangle, Building2, Loader2, Plus, Search } from 'lucide-react';
+import {
+  AlertTriangle,
+  Building2,
+  Loader2,
+  Lock,
+  Plus,
+  Search,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -33,6 +40,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   ACCOUNT_STATUSES,
+  accountPeople,
   buildQuery,
   platformFetch,
   type AccountListResponse,
@@ -41,7 +49,8 @@ import {
 } from './platform-api';
 import { LoadMore } from './load-more';
 import { NewClientDialog } from './new-client-dialog';
-import { StatusBadge } from './status-badge';
+import { AccessBadge, StatusBadge } from './status-badge';
+import { planLabel, usePlans } from './use-plans';
 
 const PAGE_SIZE = 50;
 
@@ -49,6 +58,8 @@ export function ClientsScreen() {
   const t = useTranslations('Platform');
   const tStatus = useTranslations('Platform.status');
   const format = useFormatter();
+  // The roster prints tier names, not the codes stored on the row.
+  const { plans } = usePlans();
 
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -243,12 +254,18 @@ export function ClientsScreen() {
                 const disconnected = !row.whatsapp?.connected;
                 const suspended =
                   row.status === 'suspended' || row.status === 'cancelled';
+                // Revoked and suspended are different problems that
+                // happen to share a colour, so the marker differs: a
+                // padlock for "cannot sign in", the alarm triangle for
+                // "service stopped".
+                const revoked = Boolean(row.access_revoked_at);
+                const people = accountPeople(row);
                 return (
                   <TableRow
                     key={row.id}
                     className={cn(
                       'border-l-2',
-                      suspended
+                      suspended || revoked
                         ? 'border-l-destructive bg-destructive/5'
                         : disconnected
                           ? 'border-l-primary'
@@ -260,7 +277,9 @@ export function ClientsScreen() {
                         href={`/platform/clientes/${row.id}`}
                         className="flex items-center gap-2 hover:text-primary"
                       >
-                        {suspended || disconnected ? (
+                        {revoked ? (
+                          <Lock className="size-3.5 shrink-0 text-destructive" />
+                        ) : suspended || disconnected ? (
                           <AlertTriangle
                             className={cn(
                               'size-3.5 shrink-0',
@@ -273,11 +292,14 @@ export function ClientsScreen() {
                     </TableCell>
 
                     <TableCell>
-                      <StatusBadge status={row.status} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusBadge status={row.status} />
+                        <AccessBadge revokedAt={row.access_revoked_at} />
+                      </div>
                     </TableCell>
 
                     <TableCell className="text-muted-foreground">
-                      {row.plan || '—'}
+                      {planLabel(plans, row.plan) ?? '—'}
                     </TableCell>
 
                     <TableCell>
@@ -293,9 +315,9 @@ export function ClientsScreen() {
                     </TableCell>
 
                     <TableCell className="text-muted-foreground">
-                      {typeof row.people === 'number'
-                        ? t('clients.people', { count: row.people })
-                        : t('health.bad')}
+                      {people === null
+                        ? t('health.bad')
+                        : t('clients.people', { count: people })}
                     </TableCell>
 
                     <TableCell className="text-muted-foreground">

@@ -30,6 +30,25 @@ export default function LoginPage() {
   );
 }
 
+/**
+ * Did this sign-in fail because the user is banned, rather than because
+ * the password is wrong?
+ *
+ * The two are genuinely distinguishable: GoTrue answers a password grant
+ * from a banned user with the `user_banned` error code, and `AuthError`
+ * carries it on `.code` (auth-js exposes it in its `ErrorCode` union).
+ * Wrong credentials come back as `invalid_credentials`. We match on the
+ * code and nothing else — no HTTP status, no message substring — so a
+ * copy edit upstream cannot start telling people their access was
+ * revoked when they merely typoed their password.
+ *
+ * Enforcement lives on the auth user itself (migration 050); this is
+ * only the difference between a useful message and a wrong one.
+ */
+function isBannedError(error: { code?: string }): boolean {
+  return error.code === "user_banned";
+}
+
 function LoginPageInner() {
   const searchParams = useSearchParams();
   // Forwarded from `/join/<token>` when the visitor already has an
@@ -37,16 +56,21 @@ function LoginPageInner() {
   // page to accept rather than to /dashboard.
   const inviteToken = searchParams.get("invite");
   const t = useTranslations("LoginPage");
+  const tAuth = useTranslations("Auth");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Told apart from `error` because it is not the user's mistake and no
+  // amount of retrying fixes it: Altokia pulled this login's access.
+  const [revoked, setRevoked] = useState(false);
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setRevoked(false);
     setLoading(true);
 
     const { error } = await supabase.auth.signInWithPassword({
@@ -55,7 +79,8 @@ function LoginPageInner() {
     });
 
     if (error) {
-      setError(error.message);
+      if (isBannedError(error)) setRevoked(true);
+      else setError(error.message);
       setLoading(false);
       return;
     }
@@ -96,10 +121,23 @@ function LoginPageInner() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
-            {error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                {error}
+            {revoked ? (
+              <div
+                role="alert"
+                className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-500"
+              >
+                <p className="font-medium">{tAuth("accessRevoked.title")}</p>
+                <p className="mt-1 opacity-90">{tAuth("accessRevoked.body")}</p>
               </div>
+            ) : (
+              error && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400"
+                >
+                  {error}
+                </div>
+              )
             )}
 
             <div className="flex flex-col gap-2">

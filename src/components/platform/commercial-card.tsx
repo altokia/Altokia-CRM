@@ -17,23 +17,37 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { PlanIncludes, PlanSelect } from './plan-select';
 import { StatusBadge } from './status-badge';
 import { SuspendDialog } from './suspend-dialog';
-import { platformPatch, type AccountRecord } from './platform-api';
+import { usePlans } from './use-plans';
+import {
+  platformPatch,
+  type AccountRecord,
+  type PlanLimitKey,
+} from './platform-api';
 
 export function CommercialCard({
   account,
+  usage,
   onChanged,
 }: {
   account: AccountRecord;
+  /**
+   * What this client has actually used, keyed the same way a plan's
+   * limits are, so the tier's contents can read "3.000 de 10.000"
+   * instead of a ceiling with no context. Partial on purpose: a line
+   * the console cannot measure shows the bare limit.
+   */
+  usage?: Partial<Record<PlanLimitKey, number | null | undefined>>;
   onChanged: () => void;
 }) {
   const t = useTranslations('Platform');
+  const { selectable, find, loading } = usePlans();
 
-  const [plan, setPlan] = useState(account.plan ?? '');
+  const [plan, setPlan] = useState<string | null>(account.plan ?? null);
   const [notes, setNotes] = useState(account.operator_notes ?? '');
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
@@ -46,8 +60,8 @@ export function CommercialCard({
     return () => clearTimeout(timer);
   }, [justSaved]);
 
-  const dirty =
-    plan !== (account.plan ?? '') || notes !== (account.operator_notes ?? '');
+  const planChanged = plan !== (account.plan ?? null);
+  const dirty = planChanged || notes !== (account.operator_notes ?? '');
 
   const suspended =
     account.status === 'suspended' || account.status === 'cancelled';
@@ -57,10 +71,16 @@ export function CommercialCard({
     setSaving(true);
     try {
       await platformPatch(`/api/platform/accounts/${account.id}`, {
-        plan: plan.trim(),
+        // Null clears the tier: since 050 this column is a foreign key
+        // to the catalogue, so "" is not a value it can hold.
+        plan,
         operator_notes: notes,
       });
       setJustSaved(true);
+      // Only the plan gets a toast. Moving a business between tiers
+      // changes what they are allowed to do, and the operator should
+      // see it land; a note saved is what the button tick is for.
+      if (planChanged) toast.success(t('plan.saved'));
       onChanged();
     } catch (err) {
       console.error('[platform-console] settings save failed:', err);
@@ -134,14 +154,21 @@ export function CommercialCard({
           </div>
         ) : null}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="platform-plan">{t('clients.plan')}</Label>
-          <Input
+        <div className="space-y-3">
+          <PlanSelect
             id="platform-plan"
+            label={t('plan.change')}
             value={plan}
-            maxLength={60}
+            plans={selectable}
+            disabled={loading}
+            onChange={setPlan}
+          />
+          {/* What the tier means, next to the control that changes it —
+              the decision is about the ceilings, not the word. */}
+          <PlanIncludes
+            plan={find(plan)}
+            usage={usage}
             className="sm:max-w-xs"
-            onChange={(e) => setPlan(e.target.value)}
           />
         </div>
 

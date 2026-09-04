@@ -8,8 +8,13 @@
 //   2. Is it being used?         (usage)
 //   3. May I look inside?        (support access — consent, not a
 //                                 switch the console can flip itself)
-//   4. Is its number connected?  (WhatsApp + the per-client webhook)
-//   5. What are we charging?     (commercial settings, suspension)
+//   4. Can they get in?          (the credentials Altokia issued, and
+//                                 the power to change or withdraw them)
+//   5. Is its number connected?  (WhatsApp + the per-client webhook)
+//   6. What are we charging?     (plan, notes, suspension)
+//
+// Panels 3 and 4 are neighbours and opposites: one is access we have
+// to ask the customer for, the other is access we hand them.
 //
 // Every panel re-reads the whole detail after it changes something, so
 // what is on screen is always what the server last said — no local
@@ -25,11 +30,16 @@ import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AccessCard } from './access-card';
 import { CommercialCard } from './commercial-card';
+import { CredentialsCard } from './credentials-card';
 import { HealthCard } from './health-card';
 import { StatusBadge } from './status-badge';
 import { UsageCard } from './usage-card';
 import { WhatsappCard } from './whatsapp-card';
-import { platformFetch, type AccountDetail } from './platform-api';
+import {
+  platformFetch,
+  resolveAccess,
+  type AccountDetail,
+} from './platform-api';
 
 export function ClientDetail({ accountId }: { accountId: string }) {
   const t = useTranslations('Platform');
@@ -132,10 +142,16 @@ export function ClientDetail({ accountId }: { accountId: string }) {
         <UsageCard usage={detail.usage} />
         <AccessCard
           accountId={account.id}
-          access={detail.access}
+          access={resolveAccess(detail)}
           onChanged={refresh}
         />
       </div>
+
+      <CredentialsCard
+        accountId={account.id}
+        accountName={account.name}
+        onChanged={refresh}
+      />
 
       <WhatsappCard
         accountId={account.id}
@@ -143,7 +159,17 @@ export function ClientDetail({ accountId }: { accountId: string }) {
         onChanged={refresh}
       />
 
-      <CommercialCard account={account} onChanged={refresh} />
+      <CommercialCard
+        account={account}
+        // Only the two figures that mean the same thing the plan's
+        // limits mean. The rest of the usage block counts messages,
+        // which no tier puts a ceiling on.
+        usage={{
+          contacts: detail.usage.contacts,
+          ai_replies_per_month: detail.usage.ai_replies_30d,
+        }}
+        onChanged={refresh}
+      />
     </div>
   );
 }

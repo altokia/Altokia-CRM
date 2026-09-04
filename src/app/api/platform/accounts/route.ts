@@ -4,7 +4,8 @@
 //   GET  — the table Altokia's console opens on: one row per client,
 //          with the three things that answer "is this customer OK?"
 //          (number connected, people inside, last message).
-//   POST — provision a client.
+//   POST — provision a client from nothing: create the owner's login,
+//          set its password, and hand both back once.
 //
 // Both are OPERATIONAL METADATA, so neither asks for consent: an
 // operator has to be able to see that a customer is broken without
@@ -16,25 +17,27 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-import {
-  clampExpiryDays,
-  generateInviteToken,
-  inviteExpiresAt,
-  inviteUrl,
-} from '@/lib/auth/invitations'
 import { isValidTimeZone } from '@/lib/availability'
 import {
   logPlatformAction,
   requirePlatformOperator,
   toPlatformErrorResponse,
 } from '@/lib/platform'
+import {
+  MIN_PASSWORD_LENGTH,
+  adminAuth,
+  generatePassword,
+  isAcceptablePassword,
+  loginUrl,
+  resolveBaseUrl,
+} from '@/lib/platform/provisioning'
 
 const ACCOUNT_STATUSES = ['trial', 'active', 'suspended', 'cancelled'] as const
 
 const LIST_SELECT =
   'id, name, status, plan, created_at, provisioned_at, trial_ends_at, suspended_at, external_ref'
 const CREATED_SELECT =
-  'id, name, status, plan, limits, timezone, created_at, provisioned_at, provisioned_by, trial_ends_at, external_ref'
+  'id, name, status, plan, limits, timezone, created_at, owner_user_id, provisioned_at, provisioned_by, trial_ends_at, external_ref, credentials_issued_at, credentials_issued_by, access_revoked_at'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
@@ -75,39 +78,6 @@ interface ConfigRow {
   connected_at: string | null
   registered_at: string | null
   last_registration_error: string | null
-}
-
-/**
- * Resolve the public base URL for links we hand an operator.
- *
- * `NEXT_PUBLIC_SITE_URL` wins when set (the deployment's own answer);
- * otherwise the proxy headers, which is what makes links work on
- * Hostinger / Vercel / Cloudflare without an env var. Falls back to an
- * empty string so the caller still gets a usable relative path rather
- * than a link pointing at somebody else's domain.
- */
-function resolveBaseUrl(request: Request): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  if (explicit) return explicit.replace(/\/+$/, '')
-
-  const forwardedHost = request.headers
-    .get('x-forwarded-host')
-    ?.split(',')[0]
-    ?.trim()
-  if (forwardedHost) {
-    const proto =
-      request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'https'
-    return `${proto}://${forwardedHost}`
-  }
-
-  const host = request.headers.get('host')?.trim()
-  if (host) {
-    const proto = new URL(request.url).protocol.replace(':', '')
-    return `${proto}://${host}`
-  }
-
-  console.warn('[platform/accounts] could not derive a base URL from request')
-  return ''
 }
 
 // ------------------------------------------------------------
@@ -359,97 +329,93 @@ export async function GET(request: Request) {
 }
 
 // ------------------------------------------------------------
-// POST — the alta
+// POST — the alta, in the cold
 // ------------------------------------------------------------
 /**
- * POST /api/platform/accounts
+ * How long to wait for `handle_new_user` to land the workspace.
  *
- * Body: { name, owner_email, plan?, status?, timezone?, external_ref?,
- *         trial_ends_at?, invite_expires_in_days? }
- *
- * ─── Why this claims an account instead of inserting one ──────────
- * `accounts.owner_user_id` is NOT NULL and carries
- * `idx_accounts_one_per_owner` (017, a locked design decision this
- * task is explicitly told not to touch). Two consequences follow, and
- * together they decide the shape of this endpoint:
- *
- *   * An accounts row cannot exist before its owner's login exists —
- *     there is no null to park in the column, and the operator's own
- *     user id is already taken by the operator's own account, so it
- *     would only work for the very first client.
- *   * A login that has signed up ALREADY owns exactly one account: the
- *     signup trigger (017's handle_new_user) makes it.
- *
- * So provisioning is: the client's owner signs up (one email, one
- * password, nothing else), and Altokia then turns the empty workspace
- * that signup produced into a customer — name, plan, status, billing
- * reference, and the provisioning stamps. The row is claimed exactly
- * once: `provisioned_at IS NULL` is the guard, and a second attempt
- * gets a 409 rather than silently re-badging a live client.
- *
- * ─── About the invitation ─────────────────────────────────────────
- * The link returned here is for the client's TEAM, not for its owner —
- * the owner is already inside, holding the 'owner' role their signup
- * gave them. It is minted with the machinery that already exists
- * (`generateInviteToken` → sha-256 `token_hash`, `/join/<token>`), and
- * with role 'admin' because `account_invitations` carries
- * `CHECK (role <> 'owner')`: an owner seat is transferred, never
- * invited.
+ * The trigger runs inside the same transaction as the INSERT into
+ * `auth.users`, so in the normal case the first read already finds it
+ * and no delay is paid at all. The retries exist for the two ways that
+ * stops being true: a read that lands on a replica a moment behind, and
+ * a trigger that swallowed its own failure — 017 ends with
+ * `EXCEPTION WHEN OTHERS THEN RAISE WARNING`, so a broken bootstrap
+ * looks exactly like a slow one from out here. That is precisely why a
+ * failed poll deletes the login instead of shrugging.
  */
-/**
- * Names the first kind of data found in a workspace, or null when it is
- * genuinely empty.
- *
- * Mirrors the emptiness test redeem_invitation makes (019) but stays a
- * head-count per table so it costs a handful of bounded queries rather
- * than reading rows. The list is the tables a real customer fills first;
- * a workspace with none of them has never been used.
- */
-async function workspaceOccupancy(
+const ACCOUNT_POLL_DELAYS_MS = [0, 120, 250, 500, 900]
+
+async function findWorkspaceFor(
   db: SupabaseClient,
-  accountId: string
+  ownerUserId: string
 ): Promise<string | null> {
-  const probes: Array<[string, string]> = [
-    ['contacts', 'contactos'],
-    ['conversations', 'conversaciones'],
-    ['whatsapp_config', 'un número de WhatsApp'],
-    ['message_templates', 'plantillas'],
-    ['broadcasts', 'difusiones'],
-    ['deals', 'oportunidades'],
-    ['catalog_items', 'catálogo'],
-  ]
-  const results = await Promise.all(
-    probes.map(([table]) =>
-      db
-        .from(table)
-        .select('id', { count: 'exact', head: true })
-        .eq('account_id', accountId)
-    )
-  )
-  for (let i = 0; i < results.length; i++) {
-    const { count, error } = results[i]
-    // A probe that failed is treated as occupied: refusing to provision
-    // is recoverable, handing out access to a live account is not.
-    if (error) return probes[i][1]
-    if ((count ?? 0) > 0) return probes[i][1]
+  for (const delay of ACCOUNT_POLL_DELAYS_MS) {
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
+    const { data, error } = await db
+      .from('accounts')
+      .select('id')
+      .eq('owner_user_id', ownerUserId)
+      .maybeSingle()
+    if (error) {
+      console.error('[POST /api/platform/accounts] workspace poll error:', error)
+      continue
+    }
+    if (data?.id) return data.id as string
   }
-  // More than one member means somebody was invited in — also a sign of
-  // a workspace in use, and profiles is not account-scoped by id column.
-  const { count: members, error: membersError } = await db
-    .from('profiles')
-    .select('user_id', { count: 'exact', head: true })
-    .eq('account_id', accountId)
-  if (membersError) return 'miembros'
-  if ((members ?? 0) > 1) return 'un equipo'
   return null
 }
 
+/**
+ * POST /api/platform/accounts
+ *
+ * Body: { name, owner_email, owner_name?, password?, plan?, status?,
+ *         timezone?, external_ref?, trial_ends_at? }
+ *
+ * ─── The alta is cold now ─────────────────────────────────────────
+ * This endpoint used to require that the customer had already signed
+ * up: it looked their login up by email and *claimed* the empty
+ * workspace their signup had produced. That is backwards for a business
+ * that sells a service and hands over the keys — it made the customer
+ * do the one step that decides who controls the credentials, and it
+ * meant Altokia never knew the password it was supposed to be able to
+ * reset.
+ *
+ * So the route creates the login itself:
+ *
+ *   1. `auth.admin.createUser` with `email_confirm: true` — the client
+ *      confirms nothing, because the person handing them the password
+ *      is the one who already knows the address is right.
+ *   2. `handle_new_user` (017) fires on that insert exactly as it fires
+ *      on a self-signup, and produces the `accounts` row plus an owner
+ *      `profiles` row. This is why `accounts.owner_user_id` being NOT
+ *      NULL with a unique index (017, locked) was never the obstacle it
+ *      looked like: the constraint wants a login to exist first, not a
+ *      *signup* to have happened first.
+ *   3. The workspace it made is then dressed as a customer: real
+ *      business name, plan, status, billing reference, and the two
+ *      stamps that say Altokia issued the keys.
+ *
+ * If step 2 does not produce a workspace, step 1 is undone. A login
+ * with no account is a customer who can sign in to nothing and an email
+ * address that can never be provisioned again, which is a far worse
+ * outcome than an error the operator can retry.
+ *
+ * ─── The password ─────────────────────────────────────────────────
+ * Returned exactly once, in this response, and never stored anywhere by
+ * us — not in `accounts`, not in the audit trail (the customer's own
+ * admins can read that table, 045), not in a log line. If it is lost
+ * before it reaches the client, the answer is
+ * `PUT /api/platform/accounts/[id]/credentials`, which mints a new one.
+ *
+ * An existing email is a 409 and nothing else: taking over a login that
+ * already exists would mean an operator could point an email they do
+ * not control at a workspace, or silently reset a real customer's
+ * password while "creating" somebody else.
+ */
 export async function POST(request: Request) {
   try {
-    // Provisioning writes plan, status and trial_ends_at — the same
-    // commercial fields PATCH reserves to 'billing'. Letting 'support'
-    // set them here would be a way around that check, and it also mints
-    // an invitation into the new workspace.
+    // Creating a login, setting a plan and issuing credentials are all
+    // commercial acts — the same ones PATCH reserves to 'billing'.
     const ctx = await requirePlatformOperator('billing')
 
     const body = (await request.json().catch(() => null)) as Record<
@@ -460,6 +426,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
+    // --- the business ------------------------------------------
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     if (!name || name.length > MAX_NAME_LEN) {
       return NextResponse.json(
@@ -468,10 +435,9 @@ export async function POST(request: Request) {
       )
     }
 
+    // --- the owner ---------------------------------------------
     const ownerEmail =
-      typeof body.owner_email === 'string'
-        ? body.owner_email.trim().toLowerCase()
-        : ''
+      typeof body.owner_email === 'string' ? body.owner_email.trim().toLowerCase() : ''
     if (!ownerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
       return NextResponse.json(
         { error: 'owner_email must be a valid email address' },
@@ -479,6 +445,38 @@ export async function POST(request: Request) {
       )
     }
 
+    let ownerName = ''
+    if (body.owner_name !== undefined && body.owner_name !== null) {
+      if (typeof body.owner_name !== 'string' || body.owner_name.trim().length > MAX_NAME_LEN) {
+        return NextResponse.json(
+          { error: `owner_name must be a string of ${MAX_NAME_LEN} characters or fewer` },
+          { status: 400 }
+        )
+      }
+      ownerName = body.owner_name.trim()
+    }
+
+    // --- the password ------------------------------------------
+    // An operator may bring their own (a client who insists on one they
+    // will remember); otherwise the generator wins, and it should.
+    let password: string
+    let passwordGenerated = false
+    if (body.password !== undefined && body.password !== null && body.password !== '') {
+      if (!isAcceptablePassword(body.password)) {
+        return NextResponse.json(
+          {
+            error: `password must be at least ${MIN_PASSWORD_LENGTH} characters, no longer than 72 bytes, and without leading or trailing spaces`,
+          },
+          { status: 400 }
+        )
+      }
+      password = body.password as string
+    } else {
+      password = generatePassword()
+      passwordGenerated = true
+    }
+
+    // --- status -------------------------------------------------
     // Only the two states a brand-new customer can legitimately be in.
     // Suspending or cancelling is a later, audited decision (PATCH).
     const status = body.status === undefined ? 'trial' : body.status
@@ -489,17 +487,46 @@ export async function POST(request: Request) {
       )
     }
 
+    // --- plan ---------------------------------------------------
+    // 050 made `accounts.plan` a foreign key into `platform_plans`, so
+    // an unknown code is now a constraint violation. Checking it here
+    // turns a 500 with a Postgres message into a 400 that names the
+    // catalogue, and rejects a plan that has been retired.
     let plan: string | null = null
-    if (body.plan !== undefined && body.plan !== null) {
+    if (body.plan !== undefined && body.plan !== null && body.plan !== '') {
       if (typeof body.plan !== 'string' || body.plan.trim().length > MAX_PLAN_LEN) {
         return NextResponse.json(
           { error: `plan must be a string of ${MAX_PLAN_LEN} characters or fewer` },
           { status: 400 }
         )
       }
-      plan = body.plan.trim() || null
+      const code = body.plan.trim()
+      const { data: planRow, error: planError } = await ctx.db
+        .from('platform_plans')
+        .select('code, is_active')
+        .eq('code', code)
+        .maybeSingle()
+
+      if (planError) {
+        console.error('[POST /api/platform/accounts] plan lookup error:', planError)
+        return NextResponse.json({ error: 'Failed to check the plan' }, { status: 500 })
+      }
+      if (!planRow) {
+        return NextResponse.json(
+          { error: `plan '${code}' is not in the catalogue — GET /api/platform/plans lists the codes` },
+          { status: 400 }
+        )
+      }
+      if (!planRow.is_active) {
+        return NextResponse.json(
+          { error: `plan '${code}' is no longer offered` },
+          { status: 400 }
+        )
+      }
+      plan = planRow.code as string
     }
 
+    // --- the rest -----------------------------------------------
     let externalRef: string | null = null
     if (body.external_ref !== undefined && body.external_ref !== null) {
       if (
@@ -539,124 +566,114 @@ export async function POST(request: Request) {
       trialEndsAt = body.trial_ends_at
     }
 
-    const expiryDays = clampExpiryDays(
-      typeof body.invite_expires_in_days === 'number'
-        ? body.invite_expires_in_days
-        : undefined
-    )
-
     const baseUrl = resolveBaseUrl(request)
 
-    // 1. Resolve the owner's login. `profiles.email` is written from
-    //    auth.users by the signup trigger and is the only email the
-    //    service role can read through PostgREST (the auth schema is
-    //    not exposed). Two rows would mean two logins share an address,
-    //    which is not something to guess at.
-    const { data: owners, error: ownerError } = await ctx.db
+    // 1. Is this address already somebody's login? `profiles.email` is
+    //    written from auth.users by the signup trigger and is the only
+    //    place the service role can read an address through PostgREST
+    //    (the auth schema is not exposed). Asking first turns the common
+    //    mistake — provisioning the same client twice — into a clear
+    //    409 that names the account, instead of a bare "email exists"
+    //    from GoTrue.
+    const { data: existing, error: existingError } = await ctx.db
       .from('profiles')
-      .select('user_id, full_name, email, account_id')
+      .select('user_id, account_id')
       .ilike('email', ownerEmail)
-      .limit(2)
+      .limit(1)
 
-    if (ownerError) {
-      console.error('[POST /api/platform/accounts] owner lookup error:', ownerError)
+    if (existingError) {
+      console.error('[POST /api/platform/accounts] email lookup error:', existingError)
       return NextResponse.json(
-        { error: 'Failed to resolve the owner' },
+        { error: 'Failed to check whether that email is already in use' },
+        { status: 500 }
+      )
+    }
+    if (existing && existing.length > 0) {
+      return NextResponse.json(
+        {
+          error: `${ownerEmail} already has a login on this platform. Provisioning would take it over, so it is refused — use a different address, or reset the password of the existing account.`,
+          account_id: (existing[0] as { account_id: string | null }).account_id,
+        },
+        { status: 409 }
+      )
+    }
+
+    // 2. Create the login. `email_confirm: true` because there is no
+    //    confirmation to do: the operator is handing this person their
+    //    password directly, and an unconfirmed address would just mean
+    //    a client who cannot sign in until they find an email.
+    const auth = adminAuth().auth.admin
+    const { data: created, error: createError } = await auth.createUser({
+      email: ownerEmail,
+      password,
+      email_confirm: true,
+      // handle_new_user reads exactly this key (017). Falling back to
+      // the business name keeps `profiles.full_name` from being blank
+      // for a person nobody has met yet.
+      user_metadata: { full_name: ownerName || name },
+    })
+
+    if (createError || !created?.user) {
+      const code = createError?.code
+      if (
+        code === 'email_exists' ||
+        code === 'user_already_exists' ||
+        /already (been )?registered|already exists/i.test(createError?.message ?? '')
+      ) {
+        // The check above raced, or the address exists in auth.users
+        // without a profile row.
+        return NextResponse.json(
+          { error: `${ownerEmail} already has a login on this platform.` },
+          { status: 409 }
+        )
+      }
+      if (code === 'weak_password') {
+        return NextResponse.json(
+          { error: 'Supabase Auth rejected that password as too weak. Leave it blank and one will be generated.' },
+          { status: 400 }
+        )
+      }
+      console.error(
+        '[POST /api/platform/accounts] createUser failed:',
+        createError?.status,
+        code,
+        createError?.message
+      )
+      return NextResponse.json(
+        { error: 'Supabase Auth refused to create the login' },
+        { status: 502 }
+      )
+    }
+
+    const ownerUserId = created.user.id
+
+    // 3. The workspace the trigger should have made.
+    const accountId = await findWorkspaceFor(ctx.db, ownerUserId)
+    if (!accountId) {
+      // Undo the login rather than leave an address that can never be
+      // provisioned again attached to nothing.
+      const { error: cleanupError } = await auth.deleteUser(ownerUserId)
+      if (cleanupError) {
+        console.error(
+          '[POST /api/platform/accounts] orphan cleanup failed for',
+          ownerUserId,
+          cleanupError.message
+        )
+      }
+      return NextResponse.json(
+        {
+          error: cleanupError
+            ? `The login was created but no workspace appeared for it (the handle_new_user trigger did not run), and the login could not be removed. A support engineer has to delete the auth user ${ownerUserId} before ${ownerEmail} can be provisioned again.`
+            : 'The login was created but no workspace appeared for it (the handle_new_user trigger did not run). The login has been removed — nothing was left behind, so this can be retried.',
+        },
         { status: 500 }
       )
     }
 
-    const ownerRows = (owners ?? []) as {
-      user_id: string
-      full_name: string | null
-      email: string
-      account_id: string | null
-    }[]
-
-    if (ownerRows.length > 1) {
-      return NextResponse.json(
-        {
-          error: `More than one login uses ${ownerEmail}. Resolve the duplicate before provisioning.`,
-        },
-        { status: 409 }
-      )
-    }
-
-    const owner = ownerRows[0]
-    if (!owner) {
-      return NextResponse.json(
-        {
-          error: `No login exists for ${ownerEmail}. Ask the client's owner to sign up at ${baseUrl}/signup first — an account cannot be created without the login that owns it (accounts.owner_user_id is NOT NULL).`,
-        },
-        { status: 400 }
-      )
-    }
-
-    // 2. The workspace their signup created. UNIQUE(owner_user_id)
-    //    makes this at most one row.
-    const { data: owned, error: ownedError } = await ctx.db
-      .from('accounts')
-      .select('id, name, status, provisioned_at')
-      .eq('owner_user_id', owner.user_id)
-      .maybeSingle()
-
-    if (ownedError) {
-      console.error('[POST /api/platform/accounts] account lookup error:', ownedError)
-      return NextResponse.json(
-        { error: 'Failed to resolve the workspace for that owner' },
-        { status: 500 }
-      )
-    }
-
-    if (!owned) {
-      return NextResponse.json(
-        {
-          error: `${ownerEmail} does not own a workspace — they joined somebody else's account. Provisioning needs a login that owns its own.`,
-        },
-        { status: 400 }
-      )
-    }
-    if (owned.provisioned_at) {
-      return NextResponse.json(
-        {
-          error: `${ownerEmail} already runs the client account "${owned.name}".`,
-          account_id: owned.id,
-        },
-        { status: 409 }
-      )
-    }
-    // `provisioned_at IS NULL` is not the same as "unused". Every
-    // account that predates the console has it null, and a live
-    // customer must never be claimable — claiming mints an admin
-    // invitation into their workspace. So the workspace has to be
-    // demonstrably empty as well, the same test redeem_invitation
-    // makes before it deletes a personal account.
-    const occupancy = await workspaceOccupancy(ctx.db, owned.id)
-    if (occupancy) {
-      return NextResponse.json(
-        {
-          error: `That workspace already holds data (${occupancy}). It is a live account, not a blank one — provisioning would hand out access to it.`,
-          account_id: owned.id,
-        },
-        { status: 409 }
-      )
-    }
-
-    if (owner.account_id !== owned.id) {
-      // They own an empty workspace but sit inside another account.
-      // Renaming the orphan would produce a client nobody can log into.
-      return NextResponse.json(
-        {
-          error: `${ownerEmail} owns a workspace they are not a member of. Fix the membership before provisioning.`,
-        },
-        { status: 409 }
-      )
-    }
-
-    // 3. Claim it. The `provisioned_at IS NULL` filter is the guard:
-    //    two operators racing on the same email produce one client and
-    //    one 409, never two half-provisioned rows.
-    const provisionedAt = new Date().toISOString()
+    // 4. Dress the workspace as a customer. `credentials_issued_*` (050)
+    //    is what later tells the console that resetting this client's
+    //    password is routine rather than a surprise.
+    const issuedAt = new Date().toISOString()
     const { data: account, error: updateError } = await ctx.db
       .from('accounts')
       .update({
@@ -666,70 +683,47 @@ export async function POST(request: Request) {
         external_ref: externalRef,
         trial_ends_at: trialEndsAt,
         provisioned_by: ctx.userId,
-        provisioned_at: provisionedAt,
+        provisioned_at: issuedAt,
+        credentials_issued_by: ctx.userId,
+        credentials_issued_at: issuedAt,
         ...(timezone !== undefined ? { timezone } : {}),
       })
-      .eq('id', owned.id)
-      .is('provisioned_at', null)
+      .eq('id', accountId)
       .select(CREATED_SELECT)
-      .maybeSingle()
+      .single()
 
-    if (updateError) {
-      console.error('[POST /api/platform/accounts] provisioning error:', updateError)
+    if (updateError || !account) {
+      // The login and the workspace both exist and work; only the
+      // commercial fields failed. Deleting them here would be worse
+      // than reporting it — `accounts.owner_user_id` is ON DELETE
+      // RESTRICT, so the login cannot be removed without dismantling
+      // the workspace first, and the operator can finish this by hand.
+      console.error('[POST /api/platform/accounts] account update error:', updateError)
       return NextResponse.json(
-        { error: 'Failed to provision the account' },
+        {
+          error:
+            'The login and workspace were created, but the account details could not be saved. Set the name and plan from the client card, and issue a fresh password there — the one from this request was not returned.',
+          account_id: accountId,
+          owner_user_id: ownerUserId,
+        },
         { status: 500 }
       )
     }
-    if (!account) {
-      return NextResponse.json(
-        {
-          error: 'That workspace was provisioned by someone else a moment ago.',
-          account_id: owned.id,
-        },
-        { status: 409 }
-      )
-    }
-
-    // 4. The team link. Same token scheme as /api/account/invitations:
-    //    the plaintext is returned once and only the sha-256 hash is
-    //    stored, so nothing can resurface the link later.
-    const { token, hash } = generateInviteToken()
-    const expiresAt = inviteExpiresAt(expiryDays)
-    const { data: invitation, error: inviteError } = await ctx.db
-      .from('account_invitations')
-      .insert({
-        account_id: account.id,
-        token_hash: hash,
-        role: 'admin',
-        created_by_user_id: ctx.userId,
-        label: 'Altokia provisioning',
-        expires_at: expiresAt.toISOString(),
-      })
-      .select('id, role, label, expires_at, created_at')
-      .single()
-
-    if (inviteError) {
-      // The client exists; only the convenience link failed. Reporting
-      // 500 here would push the operator into retrying an alta that
-      // already succeeded, so say what happened instead.
-      console.error('[POST /api/platform/accounts] invitation error:', inviteError)
-    }
 
     await logPlatformAction(ctx, {
-      accountId: account.id,
+      accountId,
       action: 'ACCOUNT_PROVISIONED',
       detail: {
         name,
         owner_email: ownerEmail,
-        owner_user_id: owner.user_id,
+        owner_user_id: ownerUserId,
         status,
         plan,
         external_ref: externalRef,
-        // The token itself is deliberately absent: an audit row is
-        // readable by the client's admins, and this one would be a
-        // working invitation.
-        invitation_id: invitation?.id ?? null,
+        // That a password was issued is the record. What it was is not
+        // written down anywhere — this row is readable by the client.
+        credentials_issued: true,
+        password_generated: passwordGenerated,
       },
     })
 
@@ -737,20 +731,18 @@ export async function POST(request: Request) {
       {
         account,
         owner: {
-          user_id: owner.user_id,
-          email: owner.email,
-          full_name: owner.full_name,
+          user_id: ownerUserId,
+          email: ownerEmail,
+          full_name: ownerName || name,
         },
-        invitation: invitation
-          ? {
-              ...invitation,
-              token,
-              url: inviteUrl(token, baseUrl),
-            }
-          : null,
-        invitation_error: inviteError
-          ? 'The account was provisioned but the invitation link could not be created. Issue one from the Members screen inside the account.'
-          : null,
+        // The one and only time this password is readable. There is no
+        // endpoint that can show it again, by design.
+        credentials: {
+          email: ownerEmail,
+          password,
+          login_url: loginUrl(baseUrl),
+        },
+        password_generated: passwordGenerated,
       },
       { status: 201 }
     )

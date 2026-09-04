@@ -19,7 +19,11 @@
 
 import { NextResponse } from "next/server";
 
-import { requireRole, toErrorResponse } from "@/lib/auth/account";
+import {
+  assertAccountAccess,
+  requireRole,
+  toErrorResponse,
+} from "@/lib/auth/account";
 import {
   clampExpiryDays,
   generateInviteToken,
@@ -32,6 +36,7 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from "@/lib/rate-limit";
+import { checkLimit, LimitExceededError } from "@/lib/platform/limits";
 
 // Resolve the base URL we publish invite links under.
 //
@@ -167,6 +172,12 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireRole("admin");
+    // An invite is a new way into the account, and the new member's auth
+    // user would not carry the ban that was applied to the existing
+    // ones. So of every route in the app this is the one that must not
+    // work for a revoked client, even from a session that was minted
+    // before the revocation landed.
+    assertAccountAccess(ctx);
 
     // 30/min per user. The Members tab is a clicks-only UI so any
     // legitimate admin is far below this; the cap exists to keep
@@ -212,6 +223,54 @@ export async function POST(request: Request) {
         );
       }
       label = trimmed === "" ? null : trimmed;
+    }
+
+    // --- seat limit ---------------------------------------------
+    //
+    // The one plan limit this app enforces today. Counted here, at the
+    // invitation, rather than at redemption: telling an admin "you are
+    // out of seats" while they are deciding whom to add is useful,
+    // whereas telling the colleague who just clicked the link that
+    // there is no room for them is a bad first impression and leaves
+    // the admin with nothing to fix.
+    //
+    // Only redeemed members count, not outstanding invitations — an
+    // invite is not a seat until somebody takes it, and pending links
+    // expire on their own. An admin who issues four links on a
+    // three-seat plan can still overshoot; closing that means enforcing
+    // at redemption too, which is a separate change.
+    const { count: memberCount, error: countError } = await ctx.supabase
+      .from("profiles")
+      .select("user_id", { count: "exact", head: true })
+      .eq("account_id", ctx.accountId);
+
+    if (countError) {
+      // Same fail-open stance as lib/platform/limits: a failed count is
+      // our problem, not the customer's. Log it and let the invite
+      // through.
+      console.warn(
+        "[POST /api/account/invitations] seat count failed; skipping limit:",
+        countError,
+      );
+    } else {
+      const seats = await checkLimit(
+        ctx.supabase,
+        ctx.accountId,
+        "seats",
+        memberCount ?? 0,
+      );
+      if (!seats.allowed && seats.limit !== null) {
+        const err = new LimitExceededError(
+          "seats",
+          seats.limit,
+          seats.used,
+          seats.plan,
+        );
+        return NextResponse.json(
+          { error: err.message, code: err.code, limit: err.limit, used: err.used },
+          { status: err.status },
+        );
+      }
     }
 
     const { token, hash } = generateInviteToken();
