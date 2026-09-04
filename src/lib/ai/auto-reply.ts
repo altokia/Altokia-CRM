@@ -269,14 +269,30 @@ export async function dispatchInboundToAiReply(
           summary: summaryText,
         })
       } else {
-        await transitionHandoff(db, {
-          conversationId,
-          accountId,
-          to: 'waiting_for_human',
-          reason: 'ai_requested',
-          summary: summaryText,
-        })
-        await enrichHumanChatTask(db, { accountId, conversationId, structured })
+        // The account's fallback says what happens when the queue has
+        // nobody to hand this to. `ai_continue` was offered in settings
+        // and read by nothing: the thread went to waiting_for_human
+        // regardless, which silences the assistant (assistantMayReply
+        // only allows ai_active). A customer writing at 22:00 to a
+        // business whose advisors start at 09:00 then got no reply at
+        // all until morning — the opposite of what the setting promises.
+        //
+        // With it on, the thread stays with the assistant so it can keep
+        // answering and collecting details, and the HUMAN_CHAT task is
+        // still queued so a person picks it up when their shift opens.
+        const keepAiOn = await shouldAiKeepAnswering(db, accountId)
+        if (keepAiOn) {
+          await createHumanChatTask(db, { accountId, conversationId, contactId, structured, summaryText })
+        } else {
+          await transitionHandoff(db, {
+            conversationId,
+            accountId,
+            to: 'waiting_for_human',
+            reason: 'ai_requested',
+            summary: summaryText,
+          })
+          await enrichHumanChatTask(db, { accountId, conversationId, structured })
+        }
       }
       return
     }
@@ -288,6 +304,88 @@ export async function dispatchInboundToAiReply(
     await createActionTask(db, { accountId, conversationId, contactId, structured, summaryText })
   } catch (err) {
     console.error('[ai auto-reply] dispatch failed:', err)
+  }
+}
+
+/**
+ * Does this account want the assistant to keep answering when there is
+ * nobody to hand the chat to?
+ *
+ * `accounts.routing.fallback` is set in Settings → Equipo. Best-effort:
+ * a read failure falls back to the historical behaviour (hand over and
+ * go quiet), because escalating to a person is the safer default when
+ * we cannot tell what was configured.
+ */
+async function shouldAiKeepAnswering(db: SupabaseClient, accountId: string): Promise<boolean> {
+  try {
+    const { data } = await db
+      .from('accounts')
+      .select('routing')
+      .eq('id', accountId)
+      .maybeSingle()
+    const routing = (data?.routing ?? {}) as { fallback?: string }
+    return routing.fallback === 'ai_continue'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Queue the chat for a person without taking it away from the
+ * assistant. The 041 trigger normally opens this task off the
+ * waiting_for_human transition; with `ai_continue` there is no such
+ * transition, so it is opened directly.
+ */
+async function createHumanChatTask(
+  db: SupabaseClient,
+  args: {
+    accountId: string
+    conversationId: string
+    contactId: string
+    structured: StructuredReply
+    summaryText: string
+  },
+): Promise<void> {
+  const { accountId, conversationId, contactId, structured: s, summaryText } = args
+  try {
+    const { data: open } = await db
+      .from('tasks')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .eq('action_type', 'HUMAN_CHAT')
+      .in('status', ['pending', 'assigned', 'in_progress'])
+      .limit(1)
+    if (open && open.length > 0) {
+      await enrichHumanChatTask(db, { accountId, conversationId, structured: s })
+      return
+    }
+
+    const task = await createTask(db, {
+      accountId,
+      actionType: 'HUMAN_CHAT',
+      title: s.itemName ? `Atender: ${s.itemName}` : 'Atender conversación',
+      details: summaryText,
+      priority: s.priority,
+      conversationId,
+      contactId,
+      source: 'ai',
+      summary: {
+        text: s.summary,
+        interest: s.itemName,
+        need: s.need,
+        contact_preference: s.preferredContactTime,
+        intent_level: s.intentLevel,
+        lead_label: s.leadLabel,
+      },
+    })
+    await assignTask(db, {
+      accountId,
+      task,
+      decidedBy: 'ai',
+      reason: 'ai_requested:ai_continue',
+    })
+  } catch (err) {
+    console.warn('[ai auto-reply] could not queue human chat:', err instanceof Error ? err.message : err)
   }
 }
 

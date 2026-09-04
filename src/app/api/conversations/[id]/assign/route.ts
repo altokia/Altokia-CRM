@@ -57,17 +57,39 @@ export async function POST(
       }
     }
 
+    const reason = assignTo
+      ? assignTo === userId
+        ? 'agent_took_over'
+        : 'agent_assigned'
+      : 'agent_unassigned'
+
     const result = await transitionHandoff(supabase, {
       conversationId,
       accountId,
       to: assignTo ? 'human_active' : 'waiting_for_human',
-      reason: assignTo
-        ? assignTo === userId
-          ? 'agent_took_over'
-          : 'agent_assigned'
-        : 'agent_unassigned',
+      reason,
       assignTo,
     })
+
+    // The dropdown in the inbox is the way conversations actually get
+    // assigned, and it was the one path that left no trace — so
+    // "why did this land with me?" and "who took my lead?" had no
+    // answer precisely where they are asked most. Every other assigner
+    // (the tasks route, routing) already writes this row.
+    const { error: auditError } = await supabase.from('assignment_events').insert({
+      account_id: accountId,
+      conversation_id: conversationId,
+      assigned_to: assignTo,
+      strategy: 'manual',
+      decided_by: 'manual',
+      reason,
+      candidates: [],
+    })
+    if (auditError) {
+      // The assignment already happened; losing its audit row must not
+      // fail the request, but it should be loud in the logs.
+      console.error('[conversations/assign] audit insert failed:', auditError.message)
+    }
 
     return NextResponse.json({ ok: true, handoff_state: result.state })
   } catch (error) {

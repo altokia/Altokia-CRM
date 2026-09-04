@@ -81,12 +81,34 @@ describe('computeAvailability', () => {
   it('explains each way of being unavailable', () => {
     const base = { schedules: shift('15:00', '17:00') }
     expect(computeAvailability(advisor(base), THU_1300_LIMA, LIMA).reasons).toEqual(['off_shift'])
-    expect(computeAvailability(advisor({ ...base, presenceAgeMinutes: 10 }), THU_1500_LIMA, LIMA).reasons).toEqual(['offline'])
-    expect(computeAvailability(advisor({ ...base, presenceAgeMinutes: null }), THU_1500_LIMA, LIMA).reasons).toEqual(['offline'])
+    // No roster: the heartbeat is the only evidence anyone is working.
+    expect(computeAvailability(advisor({ schedules: [], presenceAgeMinutes: 10 }), THU_1500_LIMA, LIMA).reasons).toEqual(['offline'])
+    expect(computeAvailability(advisor({ schedules: [], presenceAgeMinutes: null }), THU_1500_LIMA, LIMA).reasons).toEqual(['offline'])
     expect(computeAvailability(advisor({ ...base, load: 5 }), THU_1500_LIMA, LIMA).reasons).toEqual(['at_capacity'])
     expect(computeAvailability(advisor({ ...base, override: 'busy' }), THU_1500_LIMA, LIMA).reasons).toEqual(['override_busy'])
     expect(computeAvailability(advisor({ ...base, override: 'off' }), THU_1500_LIMA, LIMA).reasons).toEqual(['override_off'])
     expect(computeAvailability(advisor({ ...base, acceptsAssignments: false }), THU_1500_LIMA, LIMA).reasons).toEqual(['not_accepting'])
+  })
+
+  it('the roster outranks the heartbeat: on shift with the tab closed still counts', () => {
+    // The failure this encodes: an advisor working the 15:00 shift from
+    // their phone used to read as offline, so routing skipped everyone
+    // and the queue grew with the schedule configured perfectly.
+    const onShiftNoTab = advisor({
+      schedules: shift('15:00', '17:00'),
+      presenceAgeMinutes: null,
+    })
+    const state = computeAvailability(onShiftNoTab, THU_1500_LIMA, LIMA)
+    expect(state.available).toBe(true)
+    expect(state.reasons).toEqual([])
+    // The signal survives for the team screen, it just does not veto.
+    expect(state.present).toBe(false)
+    expect(state.onShift).toBe(true)
+  })
+
+  it('off shift is still off shift, heartbeat or not', () => {
+    const off = advisor({ schedules: shift('15:00', '17:00'), presenceAgeMinutes: 0 })
+    expect(computeAvailability(off, THU_1300_LIMA, LIMA).reasons).toEqual(['off_shift'])
   })
 
   it('a manual "available" covers outside the shift but never over capacity', () => {

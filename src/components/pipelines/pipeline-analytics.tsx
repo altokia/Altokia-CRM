@@ -72,8 +72,13 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    // closed_at first (migration 043): updated_at moves on any edit, so
+    // touching a deal closed in January counted it as won again in
+    // March. The operations panel keys on closed_at, and two screens
+    // showing the same business two different totals is worse than
+    // either number being slightly off.
     const thisMonth = (d: Deal) => {
-      const ts = d.updated_at ?? d.created_at;
+      const ts = d.closed_at ?? d.updated_at ?? d.created_at;
       return ts ? new Date(ts) >= monthStart : false;
     };
     const wonThisMonth = deals.filter(

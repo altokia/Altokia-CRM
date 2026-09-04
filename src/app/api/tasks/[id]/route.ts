@@ -62,6 +62,12 @@ export async function PATCH(
       patch.details = body.details
     }
     if (body.due_at !== undefined) {
+      // Moving the due date re-arms the reminder. sendDueReminders only
+      // looks at rows with `due_notified_at IS NULL` (tasks/cron), so a
+      // task that already fired once would otherwise be postponed into
+      // permanent silence — the snooze would look like it worked and
+      // then nothing would ever ring again.
+      patch.due_notified_at = null
       if (body.due_at === null) {
         patch.due_at = null
       } else if (typeof body.due_at === 'string' && !Number.isNaN(Date.parse(body.due_at))) {

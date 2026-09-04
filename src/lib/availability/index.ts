@@ -125,7 +125,24 @@ export function computeAvailability(advisor: AdvisorSnapshot, now: Date, timeZon
   const coveringManually = advisor.override === 'available'
   if (!coveringManually) {
     if (!onShift) reasons.push('off_shift')
-    if (!present) reasons.push('offline')
+
+    // The heartbeat only blocks an advisor who has NO schedule.
+    //
+    // Presence is written by a browser component every 30 seconds and
+    // goes stale after three minutes, so requiring it on top of the
+    // roster meant a business could configure shifts perfectly and
+    // still have nothing assigned to anyone: an advisor working the
+    // 15:00 shift from their phone, or with the tab closed between
+    // calls, read as offline. Routing then skipped every candidate and
+    // the queue grew with nobody noticing — the exact failure the
+    // schedule feature exists to prevent.
+    //
+    // With a roster configured, the roster is the business's answer to
+    // "who is working right now", and that answer wins. Presence stays
+    // in `present` and in `reasons` as a signal the team screen shows,
+    // it just no longer vetoes the assignment. Without a roster there
+    // is nothing else to go on, so the heartbeat still decides.
+    if (!present && advisor.schedules.length === 0) reasons.push('offline')
   }
 
   return {
