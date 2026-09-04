@@ -11,7 +11,6 @@ import { SettingsOverview } from '@/components/settings/settings-overview';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
-import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { QuickRepliesManager } from '@/components/settings/quick-replies-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
@@ -32,9 +31,10 @@ import {
 // the "missing Suspense with CSR bailout" error and the whole page bails
 // to client-side rendering — shipping a settings screen whose rail never
 // wires up its click handlers. You land on the section the URL carried
-// (the account-menu Settings link points at `?tab=whatsapp`) and can't
-// navigate away. Mirror the login/signup split: a thin wrapper supplies
-// the boundary; the inner component reads the query string.
+// (the account-menu Settings link still points at the retired
+// `?tab=whatsapp`, which resolves to Overview) and can't navigate
+// away. Mirror the login/signup split: a thin wrapper supplies the
+// boundary; the inner component reads the query string.
 export default function SettingsPage() {
   return (
     <Suspense fallback={null}>
@@ -78,7 +78,6 @@ function SettingsPageInner() {
     profile: <ProfileForm />,
     security: <SecurityPanel />,
     appearance: <AppearancePanel />,
-    whatsapp: <WhatsAppConfig />,
     catalog: <CatalogManager />,
     labels: <LabelsManager />,
     terminology: <TerminologySettings />,

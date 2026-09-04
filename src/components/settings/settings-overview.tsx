@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2, MessageCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { createClient } from '@/lib/supabase/client';
@@ -26,6 +26,12 @@ interface OverviewCounts {
   customFields: number | null;
 }
 
+/**
+ * What GET /api/whatsapp/config still tells a customer. Altokia owns
+ * the connection now, so the route answers with these two booleans and
+ * nothing else — no credentials, no Meta error text, no repair steps
+ * for a repair the customer is not allowed to perform.
+ */
 interface WhatsAppStatus {
   configured: boolean;
   connected: boolean;
@@ -40,6 +46,7 @@ export function SettingsOverview({
     useAuth();
   const { mode, theme } = useTheme();
   const t = useTranslations('Settings.overview');
+  const tSettings = useTranslations('Settings');
   const tRoles = useTranslations('Settings.roles');
   const tSections = useTranslations('Settings.sections');
 
@@ -48,7 +55,9 @@ export function SettingsOverview({
   // WhatsApp status is tracked separately: its health check decrypts the
   // token and pings Meta, which is far slower than the cheap count
   // queries. Gating it independently keeps a slow/flaky Meta round-trip
-  // from blanking the rest of the landing.
+  // from blanking the rest of the landing. It is no longer a tile —
+  // there is nothing here for the customer to open — but the answer is
+  // still worth showing next to the line naming who manages it.
   const [whatsapp, setWhatsapp] = useState<WhatsAppStatus | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState(true);
 
@@ -57,7 +66,6 @@ export function SettingsOverview({
     let cancelled = false;
     const supabase = createClient();
     const userId = user.id;
-    const acctId = accountId;
 
     // Cheap counts — resolve fast, render immediately.
     (async () => {
@@ -117,23 +125,26 @@ export function SettingsOverview({
       setCountsLoading(false);
     })();
 
-    // WhatsApp connection status — slower, independent.
+    // WhatsApp connection status — slower, independent. One request:
+    // the route reports both halves now, so the landing no longer reads
+    // the whatsapp_config row itself just to learn whether one exists.
     (async () => {
       setWhatsappLoading(true);
-      const [row, health] = await Promise.allSettled([
-        supabase
-          .from('whatsapp_config')
-          .select('phone_number_id')
-          .eq('account_id', acctId)
-          .maybeSingle(),
-        fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) => r.json()),
-      ]);
-      if (cancelled) return;
-      setWhatsapp({
-        configured: row.status === 'fulfilled' && !!row.value.data?.phone_number_id,
-        connected: health.status === 'fulfilled' && !!health.value?.connected,
-      });
-      setWhatsappLoading(false);
+      try {
+        const res = await fetch('/api/whatsapp/config', { cache: 'no-store' });
+        const health = await res.json();
+        if (cancelled) return;
+        setWhatsapp({
+          configured: !!health?.configured,
+          connected: !!health?.connected,
+        });
+      } catch (err) {
+        console.error('Failed to load WhatsApp status:', err);
+        if (cancelled) return;
+        setWhatsapp({ configured: false, connected: false });
+      } finally {
+        if (!cancelled) setWhatsappLoading(false);
+      }
     })();
 
     return () => {
@@ -158,21 +169,6 @@ export function SettingsOverview({
     loading: boolean;
     subtitle: ReactNode;
   }[] = [
-    {
-      section: 'whatsapp',
-      loading: whatsappLoading,
-      subtitle: !whatsapp?.configured ? (
-        t('notSetup')
-      ) : whatsapp.connected ? (
-        <>
-          <StatusDot tone="ok" /> {t('connected')}
-        </>
-      ) : (
-        <>
-          <StatusDot tone="muted" /> {t('needsReconnecting')}
-        </>
-      ),
-    },
     {
       section: 'members',
       loading: countsLoading,
@@ -247,6 +243,40 @@ export function SettingsOverview({
             {tRoles(accountRole!)}
           </SettingsChip>
         ) : null}
+      </Card>
+
+      {/* WhatsApp used to be the first tile here, opening a panel where
+          the customer could paste Meta credentials and — worse — delete
+          the connection. Altokia does that work now, so what is left is
+          a line saying so. It is not a link and not a tile: an empty
+          space where WhatsApp used to be is what makes someone open a
+          support ticket, and a tile that goes nowhere is worse. */}
+      <Card className="mt-4 flex-row items-start gap-3.5 px-4 py-3.5">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+          <MessageCircle className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-foreground">
+            {tSettings('whatsappManaged')}
+          </p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            {whatsappLoading ? (
+              <>
+                <Loader2 className="size-3 animate-spin" /> {t('loading')}
+              </>
+            ) : !whatsapp?.configured ? (
+              t('notSetup')
+            ) : whatsapp.connected ? (
+              <>
+                <StatusDot tone="ok" /> {t('connected')}
+              </>
+            ) : (
+              <>
+                <StatusDot tone="muted" /> {t('needsReconnecting')}
+              </>
+            )}
+          </p>
+        </div>
       </Card>
 
       {/* Status tiles */}

@@ -21,6 +21,7 @@ import {
   toPlatformErrorResponse,
   type PlatformRole,
 } from '@/lib/platform'
+import { resolveBaseUrl } from '@/lib/platform/provisioning'
 
 const ACCOUNT_STATUSES = ['trial', 'active', 'suspended', 'cancelled'] as const
 type AccountStatus = (typeof ACCOUNT_STATUSES)[number]
@@ -66,7 +67,7 @@ function hasPlatformRole(role: PlatformRole, min: PlatformRole): boolean {
  * header. One query, one number, no id list on the wire.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -110,7 +111,7 @@ export async function GET(
       ctx.db
         .from('whatsapp_config')
         .select(
-          'phone_number_id, waba_id, app_id, status, connected_at, registered_at, subscribed_apps_at, last_registration_error, webhook_token, app_secret, updated_at'
+          'phone_number_id, waba_id, app_id, status, connected_at, registered_at, subscribed_apps_at, last_registration_error, webhook_token, app_secret, verify_token, updated_at'
         )
         .eq('account_id', id)
         .maybeSingle(),
@@ -217,6 +218,7 @@ export async function GET(
       last_registration_error: string | null
       webhook_token: string | null
       app_secret: string | null
+      verify_token: string | null
       updated_at: string | null
     } | null
 
@@ -270,6 +272,17 @@ export async function GET(
             subscribed_apps_at: config.subscribed_apps_at,
             last_registration_error: config.last_registration_error,
             webhook_token: config.webhook_token,
+            // The address the operator pastes into Meta. Built here so
+            // the ficha can show it whenever it is opened: before this,
+            // it existed only in the response to the save that created
+            // it, so reopening the client days later left nowhere to
+            // read it from and no way to finish the setup.
+            webhook_url: config.webhook_token
+              ? `${resolveBaseUrl(request)}/api/whatsapp/webhook/${config.webhook_token}`
+              : null,
+            // Whether Meta's subscription handshake can succeed. The
+            // value itself never leaves the server.
+            verify_token_set: Boolean(config.verify_token),
             updated_at: config.updated_at,
           }
         : null,

@@ -7,7 +7,6 @@ import {
   KeyRound,
   LayoutGrid,
   Palette,
-  PlugZap,
   Shield,
   Tags,
   Type,
@@ -30,7 +29,6 @@ export const SETTINGS_SECTIONS = [
   'profile',
   'security',
   'appearance',
-  'whatsapp',
   'catalog',
   'labels',
   'terminology',
@@ -60,7 +58,6 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   profile: { id: 'profile', label: 'Your profile', icon: User, group: 'account' },
   security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
-  whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
   catalog: { id: 'catalog', label: 'Catalog', icon: Package, group: 'workspace' },
   labels: { id: 'labels', label: 'Lead labels', icon: Bookmark, group: 'workspace' },
   terminology: { id: 'terminology', label: 'Terminology', icon: Type, group: 'workspace' },
@@ -90,9 +87,18 @@ function isSection(value: string | null): value is SettingsSection {
  * flat layout collapse onto their new home (Tags + Custom fields → the
  * merged "Fields & tags" section). Anything unknown falls back to the
  * Overview landing.
+ *
+ * `whatsapp` is legacy too, for a different reason: connecting the
+ * number is Altokia's job, not the customer's, so the panel is gone.
+ * The value still arrives — the account menu in the header and the
+ * sidebar both link to `?tab=whatsapp`, and customers have the link
+ * bookmarked — so it lands on Overview, where a line says who now
+ * manages the connection. Listed explicitly rather than left to the
+ * fallback so the mapping survives someone tightening that fallback.
  */
 export function resolveSection(raw: string | null): SettingsSection {
   if (raw === 'tags' || raw === 'custom-fields') return 'fields';
+  if (raw === 'whatsapp') return DEFAULT_SECTION;
   if (isSection(raw)) return raw;
   return DEFAULT_SECTION;
 }

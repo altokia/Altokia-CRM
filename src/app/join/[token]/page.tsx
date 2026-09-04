@@ -11,20 +11,28 @@
 //   │ peek                 │ auth          │ render                   │
 //   ├──────────────────────┼───────────────┼─────────────────────────┤
 //   │ loading              │ —             │ spinner                  │
-//   │ ok:false (any reason)│ —             │ friendly error + signup  │
-//   │ ok:true              │ signed out    │ "Sign up" + "Sign in"    │
+//   │ ok:false (any reason)│ —             │ friendly error + sign in │
+//   │ ok:true              │ signed out    │ "Sign in" + where a      │
+//   │                      │               │ login comes from         │
 //   │ ok:true              │ signed in     │ "Accept" button → redeem │
 //   └──────────────────────┴───────────────┴─────────────────────────┘
 //
+// Every dead end here used to offer "create an account". That door is
+// closed: nobody self-registers in this product — Altokia creates each
+// login from the operator console and hands over the credentials — so
+// the signed-out visitor gets one action (sign in) plus a line saying
+// where a login comes from if they don't have one yet. The invitation
+// itself is unchanged: it still moves an existing login into the
+// inviting account.
+//
 // We deliberately do NOT redeem automatically on page load — the
 // invitee should confirm what account/role they're accepting.
-// Auto-redeem would also race with the signup flow returning to
-// this page after email verification.
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
@@ -65,39 +73,18 @@ interface PeekFail {
 }
 type PeekResult = PeekOk | PeekFail;
 
-const ROLE_LABEL: Record<PeekOk['role'], string> = {
-  admin: 'Admin',
-  agent: 'Agent',
-  viewer: 'Viewer',
-};
-
-const FAIL_COPY: Record<PeekFail['reason'], { title: string; body: string }> = {
-  not_found: {
-    title: 'Invite not found',
-    body: 'This link doesn’t match a valid invitation. Double-check the URL or ask the person who invited you to send a new one.',
-  },
-  used: {
-    title: 'Invite already used',
-    body: 'This invitation has already been accepted. If that wasn’t you, ask the account admin to send a fresh link.',
-  },
-  expired: {
-    title: 'Invite expired',
-    body: 'This invitation has expired. Ask the account admin to send a new one — they take a few seconds to generate.',
-  },
-  server_error: {
-    title: 'Something went wrong',
-    body: 'We couldn’t verify this invitation right now. Try refreshing the page in a moment.',
-  },
-};
-
 export default function JoinPage() {
   const params = useParams<{ token: string }>();
   const token = params?.token;
+  // Copy moved into the catalogue with the signup removal: this page is
+  // the one product screen a customer's employee sees before they have
+  // ever signed in, and it was the last one still hardcoded in English.
+  const t = useTranslations('JoinPage');
 
   const [peek, setPeek] = useState<PeekResult | null>(null);
   // Local auth probe — the AuthProvider lives inside the (dashboard)
   // route group, so it doesn't reach this page. We hit Supabase
-  // directly the same way `/login` and `/signup` do.
+  // directly the same way `/login` does.
   const [authedUserId, setAuthedUserId] = useState<string | null | undefined>(
     undefined, // undefined = unknown / still loading; null = signed out
   );
@@ -178,29 +165,26 @@ export default function JoinPage() {
         // 409 = caller already has data / is in another shared
         // account. The redeem RPC's error message is descriptive
         // enough to show directly; we open a modal so the user has
-        // a clear next-action (sign out → use different email)
+        // a clear next-action (sign out → use their other login)
         // rather than a 3-second toast.
         if (res.status === 409) {
-          setConflictMessage(
-            payload.error ||
-              'You are already in another account. Sign in with a different email to join this one.',
-          );
+          setConflictMessage(payload.error || t('conflict.fallback'));
         } else {
-          toast.error(payload.error || 'Failed to accept invitation');
+          toast.error(payload.error || t('toast.acceptFailed'));
         }
         setAccepting(false);
         return;
       }
-      toast.success('Welcome to the team');
+      toast.success(t('toast.welcome'));
       // Full reload (not router.push) so AuthProvider re-fetches
       // the profile with the new account_id and account_role.
       window.location.href = '/dashboard';
     } catch (err) {
       console.error('[join] redeem error:', err);
-      toast.error('Could not reach the server');
+      toast.error(t('toast.network'));
       setAccepting(false);
     }
-  }, [token]);
+  }, [token, t]);
 
   const handleSignOutAndRetry = useCallback(async () => {
     setSigningOut(true);
@@ -212,10 +196,10 @@ export default function JoinPage() {
       window.location.reload();
     } catch (err) {
       console.error('[join] sign-out error:', err);
-      toast.error('Could not sign out. Try refreshing the page.');
+      toast.error(t('toast.signOutFailed'));
       setSigningOut(false);
     }
-  }, []);
+  }, [t]);
 
   // ----- Loading state (peek pending OR auth not yet resolved) -----
   if (peek === null || authedUserId === undefined) {
@@ -223,7 +207,7 @@ export default function JoinPage() {
       <Card className="w-full max-w-md border-border bg-card">
         <CardContent className="flex flex-col items-center gap-3 py-12">
           <Loader2 className="size-6 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Verifying invitation…</p>
+          <p className="text-sm text-muted-foreground">{t('verifying')}</p>
         </CardContent>
       </Card>
     );
@@ -231,59 +215,50 @@ export default function JoinPage() {
 
   // ----- Peek failed -----
   if (!peek.ok) {
-    const copy = FAIL_COPY[peek.reason];
     return (
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="items-center text-center">
           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/10">
             <MailX className="h-6 w-6 text-red-400" />
           </div>
-          <CardTitle className="text-xl text-foreground">{copy.title}</CardTitle>
+          <CardTitle className="text-xl text-foreground">
+            {t(`fail.${peek.reason}.title`)}
+          </CardTitle>
           <CardDescription className="text-muted-foreground">
-            {copy.body}
+            {t(`fail.${peek.reason}.body`)}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {/* For server_error the failure is transient — the network
-              flapped or the peek endpoint hiccupped. Try-again is
-              the right primary action; the "create account" /
-              "sign in" links stay as secondary options. Other
-              failure reasons (not_found / used / expired) are
-              terminal for this token, so no retry — just the
-              signup/sign-in escape hatches. */}
+              flapped or the peek endpoint hiccupped. Try-again is the
+              right primary action, with sign-in as the secondary escape
+              hatch. The other reasons (not_found / used / expired) are
+              terminal for this token, so signing in is all that is left
+              to offer: a replacement invite can only come from the admin
+              who issued this one. */}
           {peek.reason === 'server_error' ? (
             <>
               <Button
                 onClick={loadPeekAndAuth}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                Try again
+                {t('tryAgain')}
               </Button>
-              <Link href="/signup">
-                <Button
-                  variant="outline"
-                  className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  Create a new account instead
-                </Button>
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link href="/signup">
-                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                  Create a new account instead
-                </Button>
-              </Link>
               <Link href="/login">
                 <Button
                   variant="outline"
                   className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
-                  Sign in
+                  {t('signIn')}
                 </Button>
               </Link>
             </>
+          ) : (
+            <Link href="/login">
+              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                {t('signIn')}
+              </Button>
+            </Link>
           )}
         </CardContent>
       </Card>
@@ -297,22 +272,22 @@ export default function JoinPage() {
         <UsersRound className="h-6 w-6 text-primary" />
       </div>
       <CardTitle className="text-xl text-foreground">
-        You&apos;re invited to{' '}
-        <span className="text-primary">{peek.account_name}</span>
+        {t('invitedTo')} <span className="text-primary">{peek.account_name}</span>
       </CardTitle>
       <CardDescription className="text-muted-foreground">
-        You&apos;ll join as{' '}
+        {t('joinAs')}{' '}
         <span className="inline-flex items-center gap-1 text-foreground">
           <ShieldCheck className="size-3.5 text-primary" />
-          {ROLE_LABEL[peek.role]}
+          {t(`roles.${peek.role}`)}
         </span>
-        . Link valid until{' '}
-        {new Date(peek.expires_at).toLocaleDateString(undefined, {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
+        {'. '}
+        {t('validUntil', {
+          date: new Date(peek.expires_at).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          }),
         })}
-        .
       </CardDescription>
     </CardHeader>
   );
@@ -332,19 +307,17 @@ export default function JoinPage() {
               {accepting ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  Accepting…
+                  {t('accepting')}
                 </>
               ) : (
                 <>
                   <CheckCircle className="size-4" />
-                  Accept invitation
+                  {t('accept')}
                 </>
               )}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              Accepting moves your login into{' '}
-              <span className="text-muted-foreground">{peek.account_name}</span>. Your
-              empty personal account from signup will be cleaned up.
+              {t('acceptNote', { account: peek.account_name })}
             </p>
           </CardContent>
         </Card>
@@ -363,20 +336,18 @@ export default function JoinPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-popover-foreground">
                 <AlertTriangle className="size-4 text-amber-400" />
-                Can&apos;t join {peek.account_name} with this account
+                {t('conflict.title', { account: peek.account_name })}
               </DialogTitle>
               <DialogDescription className="text-muted-foreground">
                 {conflictMessage}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 py-2 text-xs text-muted-foreground">
-              <p>
-                To join{' '}
-                <span className="text-popover-foreground">{peek.account_name}</span>,
-                sign out and sign up again with a different email address.
-                The invite link stays valid as long as it hasn&apos;t
-                expired.
-              </p>
+              {/* This used to end with "sign up again with a different
+                  email". There is no signing up any more, so the way out
+                  is the other login the person already holds — or one
+                  Altokia issues them. */}
+              <p>{t('conflict.help', { account: peek.account_name })}</p>
             </div>
             <DialogFooter className="bg-popover border-border">
               <Button
@@ -384,7 +355,7 @@ export default function JoinPage() {
                 onClick={() => setConflictMessage(null)}
                 className="border-border text-popover-foreground hover:bg-muted"
               >
-                Stay signed in
+                {t('conflict.stay')}
               </Button>
               <Button
                 onClick={handleSignOutAndRetry}
@@ -394,10 +365,10 @@ export default function JoinPage() {
                 {signingOut ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    Signing out…
+                    {t('conflict.signingOut')}
                   </>
                 ) : (
-                  'Sign out & use a different email'
+                  t('conflict.switch')
                 )}
               </Button>
             </DialogFooter>
@@ -407,24 +378,25 @@ export default function JoinPage() {
     );
   }
 
-  // ----- Not authed: prompt to sign up or sign in -----
+  // ----- Not authed: sign in, or learn where a login comes from -----
+  //
+  // Someone who already has a login is one click from joining. Someone
+  // who has none cannot make one — the project refuses signups — so
+  // instead of a button leading to a form that always fails, they get
+  // the real instruction: ask Altokia for the credentials, then return
+  // to this same link, which stays valid until it expires.
   return (
     <Card className="w-full max-w-md border-border bg-card">
       {inviteHeader}
-      <CardContent className="flex flex-col gap-2">
-        <Link href={`/signup?invite=${encodeURIComponent(token!)}`}>
-          <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-            Create account &amp; join
-          </Button>
-        </Link>
+      <CardContent className="flex flex-col gap-3">
         <Link href={`/login?invite=${encodeURIComponent(token!)}`}>
-          <Button
-            variant="outline"
-            className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            I already have an account
+          <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+            {t('signInToJoin')}
           </Button>
         </Link>
+        <p className="text-center text-xs text-muted-foreground">
+          {t('noLoginYet')}
+        </p>
       </CardContent>
     </Card>
   );

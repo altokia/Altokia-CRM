@@ -10,14 +10,65 @@
     "forgotPassword": "¿Olvidaste tu contraseña?",
     "passwordPlaceholder": "Ingresa tu contraseña",
     "signingIn": "Iniciando sesión...",
-    "signIn": "Iniciar sesión",
-    "noAccount": "¿No tienes una cuenta?",
-    "createAccount": "Crear cuenta"
+    "signIn": "Iniciar sesión"
   },
   "Auth": {
     "accessRevoked": {
       "title": "Tu acceso está suspendido",
       "body": "Contacta con Altokia para reactivarlo."
+    },
+    "login": {
+      "noSelfSignup": "Tu acceso lo crea Altokia. Si no tienes usuario, escríbenos."
+    }
+  },
+  "JoinPage": {
+    "verifying": "Verificando la invitación…",
+    "fail": {
+      "not_found": {
+        "title": "Invitación no encontrada",
+        "body": "Este enlace no corresponde a una invitación válida. Revisa la URL o pide a quien te invitó que te envíe una nueva."
+      },
+      "used": {
+        "title": "La invitación ya se usó",
+        "body": "Esta invitación ya fue aceptada. Si no fuiste tú, pide al administrador de la cuenta que envíe un enlace nuevo."
+      },
+      "expired": {
+        "title": "La invitación venció",
+        "body": "Esta invitación ya venció. Pide al administrador de la cuenta que genere una nueva; tarda unos segundos."
+      },
+      "server_error": {
+        "title": "Algo salió mal",
+        "body": "No pudimos verificar esta invitación ahora mismo. Vuelve a cargar la página en un momento."
+      }
+    },
+    "tryAgain": "Reintentar",
+    "signIn": "Iniciar sesión",
+    "signInToJoin": "Iniciar sesión y unirme",
+    "noLoginYet": "¿Todavía no tienes usuario? Los accesos los crea Altokia: escríbenos y te entregamos tu usuario y contraseña; después vuelve a este enlace.",
+    "invitedTo": "Te invitaron a",
+    "joinAs": "Entrarás como",
+    "validUntil": "El enlace es válido hasta el {date}.",
+    "roles": {
+      "admin": "Administrador",
+      "agent": "Agente",
+      "viewer": "Observador"
+    },
+    "accept": "Aceptar invitación",
+    "accepting": "Aceptando…",
+    "acceptNote": "Al aceptar, tu usuario pasa a {account}. El espacio de trabajo vacío con el que empezó se elimina.",
+    "conflict": {
+      "title": "No puedes unirte a {account} con este usuario",
+      "help": "Para unirte a {account}, cierra sesión e inicia sesión con el usuario que corresponde a esa cuenta. Si no tienes otro, pídeselo a Altokia. Este enlace de invitación sigue siendo válido hasta que venza.",
+      "fallback": "Ya perteneces a otra cuenta. Inicia sesión con otro usuario para unirte a esta.",
+      "stay": "Seguir con la sesión actual",
+      "switch": "Cerrar sesión y usar otro usuario",
+      "signingOut": "Cerrando sesión…"
+    },
+    "toast": {
+      "welcome": "Bienvenido al equipo",
+      "acceptFailed": "No se pudo aceptar la invitación",
+      "network": "No se pudo conectar con el servidor",
+      "signOutFailed": "No se pudo cerrar la sesión. Intenta recargar la página."
     }
   },
   "Sidebar": {
@@ -1388,6 +1439,7 @@
   "Settings": {
     "pageTitle": "Configuración",
     "pageDesc": "Todo en un solo lugar: tu cuenta y tu espacio de trabajo. Elige una sección para administrarla.",
+    "whatsappManaged": "La conexión de WhatsApp la configura Altokia. Si necesitas cambiarla, escríbenos.",
     "overview": {
       "notSetup": "Aún no configurado",
       "connected": "Conectado",
@@ -1438,7 +1490,7 @@
     },
     "invite": {
       "inviteCreated": "Invitación creada",
-      "inviteCreatedDesc": "Comparte este enlace con tu nuevo miembro del equipo. Podrá crear una cuenta (o iniciar sesión) y unirse a la cuenta como <bold>{role}</bold>. El enlace es válido por <bold>{days} {days, plural, =1 {día} other {días}}</bold>.",
+      "inviteCreatedDesc": "Comparte este enlace con tu nuevo miembro del equipo. Iniciará sesión y se unirá a la cuenta como <bold>{role}</bold>. El enlace es válido por <bold>{days} {days, plural, =1 {día} other {días}}</bold>. Si todavía no tiene usuario, pídele a Altokia que se lo cree.",
       "inviteLink": "Enlace de invitación",
       "copy": "Copiar",
       "saveLinkNow": "Guarda este enlace ahora.",
@@ -2379,7 +2431,23 @@
       "webhookUrl": "Dirección del webhook para este cliente",
       "webhookHint": "Pega esta dirección en la configuración de la aplicación de Meta de este cliente. Es distinta para cada uno.",
       "verifyToken": "Identificador de verificación",
-      "saved": "Número conectado"
+      "saved": "Número conectado",
+      "connected": "Número conectado",
+      "notConnected": "Sin conexión",
+      "nothingConnected": "Este cliente todavía no tiene un número conectado.",
+      "registered": "Registrado en Meta el {date}",
+      "notRegistered": "Sin registrar en Meta: no le llegarán los mensajes entrantes.",
+      "lastError": "Último error de Meta: {error}",
+      "verify": "Comprobar con Meta",
+      "verifyLive": "Todo en orden: Meta está entregando los mensajes.",
+      "verifyNotLive": "Algo falta. Mira las comprobaciones de abajo.",
+      "verifyFailed": "No se pudo comprobar con Meta",
+      "disconnect": "Desconectar",
+      "disconnectTitle": "Desconectar el número del cliente",
+      "disconnectWarning": "El cliente dejará de enviar y recibir mensajes al instante. También se pierde su dirección de webhook: para volver a conectarlo habrá que pegar una nueva en Meta.",
+      "disconnectConfirm": "Sí, desconectar",
+      "disconnected": "Número desconectado",
+      "verifyTokenHint": "Invéntalo tú y pega el mismo texto en la configuración del webhook en Meta. Sirve para que Meta y el CRM se reconozcan."
     },
     "access": {
       "none": "No tienes acceso al contenido de este cliente.",

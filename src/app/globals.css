@@ -48,6 +48,19 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-soft-2: var(--primary-soft-2);
+  /* Altokia's own brand colors, exposed as utilities
+   * (bg-altokia-ink, text-altokia-cyan, border-altokia-violet…).
+   * These are NOT product tokens: see the BRAND block below for why
+   * they are a separate set. */
+  --color-altokia-ink: var(--altokia-ink);
+  --color-altokia-surface: var(--altokia-surface);
+  --color-altokia-cyan: var(--altokia-cyan);
+  --color-altokia-violet: var(--altokia-violet);
+  --color-altokia-magenta: var(--altokia-magenta);
+  --color-altokia-white: var(--altokia-white);
+  /* The violet that is legible as text on the ink ground; the raw one
+   * is a fill color. See the BRAND block. */
+  --color-altokia-violet-lift: var(--altokia-violet-lift);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -215,6 +228,61 @@ html[data-theme="rose"] {
   --sidebar-primary: oklch(0.645 0.22 16);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-ring: oklch(0.645 0.22 16);
+}
+
+/* ============================================================
+ * BRAND — Altokia's own colors
+ *
+ * A THIRD, separate dimension from MODE and ACCENT above, and
+ * deliberately not part of either: these are the colors of the
+ * company that sells the CRM, not of the CRM. They never change
+ * with the mode/accent a signed-in person picked, and they must
+ * not leak into the client's workspace — a customer's CRM wears
+ * the customer's terminology and the customer's accent, and
+ * painting Altokia over it is exactly the wrong product.
+ *
+ * Only two surfaces use them: the Altokia console (/platform) and
+ * the sign-in screen — the two places where the visitor is looking
+ * at Altokia rather than at their own tool. Both go through
+ * `ALTOKIA_SURFACE_TOKENS` in src/components/brand/altokia-theme.ts,
+ * which maps these onto the product tokens for that subtree, so a
+ * hex change here reaches both screens and nothing else.
+ *
+ * Values are read off the logo: ink ground, split cyan/violet O,
+ * magenta K. If the owner ever hands over exact brand values, the
+ * six raw hexes below are the only thing to edit — everything else
+ * (the console chrome, the sign-in page, the wordmark SVG) derives
+ * from them with color-mix().
+ *
+ * The palette is built for a dark ground, and the derived
+ * `*-lift` values exist because the raw ones are not all legible
+ * as text: violet on ink is 3.9:1 (fine for a fill, too low for
+ * small text), so text uses --altokia-violet-lift at 8:1.
+ * Magenta stays an accent — borders, marks, the gradient — and
+ * never carries a paragraph.
+ * ============================================================ */
+
+:root {
+  --altokia-ink: #05060a;
+  --altokia-surface: #0e1017;
+  --altokia-cyan: #22d3ee;
+  --altokia-violet: #6d4aff;
+  --altokia-magenta: #ff2d8f;
+  --altokia-white: #ffffff;
+
+  /* Derived. Lightened toward white so they clear 4.5:1 on ink. */
+  --altokia-violet-lift: color-mix(in oklab, var(--altokia-violet) 62%, var(--altokia-white));
+  --altokia-violet-hover: color-mix(in oklab, var(--altokia-violet) 78%, var(--altokia-white));
+
+  /* The one brand gesture. Reserved for a single thin element per
+   * screen (a rule under a header, a card's top edge) — never a
+   * large fill and never behind text. */
+  --altokia-gradient: linear-gradient(
+    90deg,
+    var(--altokia-cyan) 0%,
+    var(--altokia-violet) 52%,
+    var(--altokia-magenta) 100%
+  );
 }
 
 @layer base {

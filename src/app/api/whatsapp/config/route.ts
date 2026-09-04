@@ -1,6 +1,34 @@
+// ============================================================
+// /api/whatsapp/config — the connection behind a customer's WhatsApp.
+//
+// Altokia connects the number, not the customer: the Meta Cloud API
+// side of it is technical work done with the client on the phone, and
+// the credentials it stores are ours to hold. So the two handlers that
+// WRITE (POST) or REMOVE (DELETE) the connection now demand a platform
+// operator — a customer admin who found this URL gets the same 404 the
+// console gives anyone who is not staff.
+//
+// The canonical way to connect a client is
+// PUT /api/platform/accounts/[id]/whatsapp, which takes the account as
+// a parameter, mints the per-client webhook address and audits the
+// change. These two stay because they are the only path that also
+// runs Meta's /register with a 2FA PIN, which the platform route does
+// not do — but they act on the CALLER's own account, so an operator
+// using them is repairing an account they themselves belong to.
+//
+// GET stays open to the customer. It is the one honest question they
+// can ask about infrastructure they do not own ("is my WhatsApp
+// working?"), and it answers with booleans, never with credentials.
+// ============================================================
+
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import {
+  logPlatformAction,
+  requirePlatformOperator,
+  toPlatformErrorResponse,
+} from '@/lib/platform'
 import {
   registerPhoneNumber,
   subscribeWabaToApp,
@@ -50,17 +78,37 @@ function supabaseAdmin() {
 /**
  * GET /api/whatsapp/config
  *
- * Used by the "Test API Connection" button and by the page to check
- * whether the saved config is healthy. Returns 200 in all non-auth cases
- * so the UI can render an appropriate message rather than show a 500.
+ * The half of this route a customer may still call, and it answers
+ * exactly one question: is my WhatsApp working? Since they can no
+ * longer act on the answer, the answer is two booleans plus the number
+ * Meta shows on the outside — which the customer already reads at the
+ * top of every conversation.
+ *
+ * Deliberately gone from the payload: the failure `reason`, the
+ * `needs_reset` flag, the copy naming ENCRYPTION_KEY, and Meta's own
+ * error text. Those described our storage to someone who does not run
+ * it, and offered a repair they are no longer allowed to perform. The
+ * diagnostic detail now lives where the person who can act on it is:
+ * the operator console's health card and registration probe.
+ *
+ * Still 200 in every non-auth case, so the settings landing can render
+ * a status line instead of an error.
  *
  * Response shape:
- *   { connected: true,  phone_info: {...} }
- *   { connected: false, reason: 'no_config',        message: '...' }
- *   { connected: false, reason: 'token_corrupted',  message: '...', needs_reset: true }
- *   { connected: false, reason: 'meta_api_error',   message: '...' }
+ *   { configured: boolean, connected: boolean,
+ *     phone_number: string | null, verified_name: string | null }
  */
 export async function GET() {
+  // Nothing configured, nothing reachable — the shape callers get for
+  // every negative answer, so none of them can tell "no row" from
+  // "Meta refused the token". Only the operator needs that difference.
+  const NOT_CONNECTED = {
+    configured: false,
+    connected: false,
+    phone_number: null as string | null,
+    verified_name: null as string | null,
+  }
+
   try {
     const supabase = await createClient()
 
@@ -75,14 +123,7 @@ export async function GET() {
 
     const accountId = await resolveAccountId(supabase, user.id)
     if (!accountId) {
-      return NextResponse.json(
-        {
-          connected: false,
-          reason: 'no_account',
-          message: 'Your profile is not linked to an account.',
-        },
-        { status: 200 },
-      )
+      return NextResponse.json(NOT_CONNECTED, { status: 200 })
     }
 
     const { data: config, error: configError } = await supabase
@@ -93,78 +134,77 @@ export async function GET() {
 
     if (configError) {
       console.error('Error fetching whatsapp_config:', configError)
-      return NextResponse.json(
-        { connected: false, reason: 'db_error', message: 'Failed to fetch configuration' },
-        { status: 200 }
-      )
+      return NextResponse.json(NOT_CONNECTED, { status: 200 })
     }
 
     if (!config) {
-      return NextResponse.json(
-        {
-          connected: false,
-          reason: 'no_config',
-          message: 'No WhatsApp configuration saved yet. Fill in the form and click Save Configuration.',
-        },
-        { status: 200 }
-      )
+      return NextResponse.json(NOT_CONNECTED, { status: 200 })
     }
 
-    // Try to decrypt the stored token with the current ENCRYPTION_KEY.
-    // If this fails, the key changed (or was never consistent across envs).
+    // From here on the row exists, so `configured` is true no matter
+    // how the health check goes: "Altokia set this up and it is
+    // currently unhealthy" is a different message to the customer than
+    // "nobody has set this up yet".
+    const configured = { ...NOT_CONNECTED, configured: true }
+
     let accessToken: string
     try {
       accessToken = decrypt(config.access_token)
     } catch (err) {
+      // Server-side only. The customer cannot rotate ENCRYPTION_KEY and
+      // cannot re-enter the token, so telling them which one broke buys
+      // nothing but a support ticket with our internals in it.
       console.error('[whatsapp/config GET] Token decryption failed:', err)
-      return NextResponse.json(
-        {
-          connected: false,
-          reason: 'token_corrupted',
-          needs_reset: true,
-          message:
-            'The stored access token cannot be decrypted with the current ENCRYPTION_KEY. This usually means the key changed, or it differs between environments (local vs Hostinger vs Vercel). Click "Reset Configuration" below, then re-save.',
-        },
-        { status: 200 }
-      )
+      return NextResponse.json(configured, { status: 200 })
     }
 
-    // Validate credentials against Meta
     try {
       const phoneInfo = await verifyPhoneNumber({
         phoneNumberId: config.phone_number_id,
         accessToken,
       })
-      return NextResponse.json({ connected: true, phone_info: phoneInfo })
+      return NextResponse.json({
+        configured: true,
+        connected: true,
+        phone_number: phoneInfo.display_phone_number ?? null,
+        verified_name: phoneInfo.verified_name ?? null,
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown Meta API error'
       console.error('[whatsapp/config GET] Meta API verification failed:', message)
-      return NextResponse.json(
-        {
-          connected: false,
-          reason: 'meta_api_error',
-          message: `Meta API rejected the credentials: ${message}`,
-        },
-        { status: 200 }
-      )
+      return NextResponse.json(configured, { status: 200 })
     }
   } catch (error) {
     console.error('Error in WhatsApp config GET:', error)
-    return NextResponse.json(
-      { connected: false, reason: 'unknown', message: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json(NOT_CONNECTED, { status: 500 })
   }
 }
 
 /**
- * POST /api/whatsapp/config
+ * POST /api/whatsapp/config — STAFF ONLY.
  *
- * Saves or updates the WhatsApp config for the authenticated user.
- * Verifies credentials with Meta first, then encrypts and stores.
+ * Saves or updates the WhatsApp connection of the CALLER's own
+ * account. Verifies the credentials with Meta first, then encrypts and
+ * stores them.
+ *
+ * The operator gate is what closes it to customers, and it closes it
+ * fairly hard: operators are deliberately members of no customer
+ * account (045 keeps the two planes disjoint), so on production a
+ * customer gets the console's 404 and an operator gets "not linked to
+ * an account". That is the intent — the live path for connecting a
+ * client is PUT /api/platform/accounts/[id]/whatsapp, which names the
+ * account explicitly and mints that client's webhook address.
+ *
+ * The handler is kept working rather than turned into a 410 because it
+ * is still the only implementation of Meta's /register + two-step PIN
+ * step, which the platform route does not perform yet.
  */
 export async function POST(request: Request) {
   try {
+    // Throws PlatformAuthError (404 for non-staff, 403 for too junior);
+    // the catch below turns it into the response.
+    const ctx = await requirePlatformOperator()
+
     const supabase = await createClient()
 
     const {
@@ -401,6 +441,20 @@ export async function POST(request: Request) {
       }
     }
 
+    // Same rule as the platform plane: flags and identifiers, never
+    // the token. The customer can read this log (045).
+    await logPlatformAction(ctx, {
+      accountId,
+      action: 'WHATSAPP_CONNECTED',
+      detail: {
+        phone_number_id,
+        waba_id: waba_id || null,
+        registered: registeredAt != null,
+        registration_error: registrationError,
+        via: 'tenant_config_route',
+      },
+    })
+
     if (registrationError) {
       // Save succeeded but the number isn't actually live. Return
       // 200 with a structured error so the UI can show the specific
@@ -426,20 +480,29 @@ export async function POST(request: Request) {
       phone_info: phoneInfo,
     })
   } catch (error) {
-    console.error('Error in WhatsApp config POST:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    // Also the exit for a refused operator check — toPlatformErrorResponse
+    // preserves its 404/403 instead of flattening it to a 500.
+    return toPlatformErrorResponse(error)
   }
 }
 
 /**
- * DELETE /api/whatsapp/config
+ * DELETE /api/whatsapp/config — STAFF ONLY, billing and up.
  *
- * Removes the authenticated user's WhatsApp configuration row.
- * Used by the "Reset Configuration" button to recover from a corrupted
- * encrypted token (mismatched ENCRYPTION_KEY across environments).
+ * Drops the caller's own WhatsApp configuration row. Same gate and
+ * same reasoning as POST above, one notch stricter: deleting the row
+ * takes the number offline AND discards `webhook_token`, so whoever
+ * reconnects has to paste a fresh webhook address into Meta. That is
+ * not something a curious customer admin should be able to do to their
+ * own company by clicking around in settings — which is precisely what
+ * the old "Reset Configuration" button let them do.
+ *
+ * Disconnecting a CLIENT is DELETE /api/platform/accounts/[id]/whatsapp.
  */
 export async function DELETE() {
   try {
+    const ctx = await requirePlatformOperator('billing')
+
     const supabase = await createClient()
 
     const {
@@ -472,9 +535,14 @@ export async function DELETE() {
       )
     }
 
+    await logPlatformAction(ctx, {
+      accountId,
+      action: 'WHATSAPP_DISCONNECTED',
+      detail: { via: 'tenant_config_route' },
+    })
+
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error in WhatsApp config DELETE:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return toPlatformErrorResponse(error)
   }
 }

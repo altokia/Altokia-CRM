@@ -1,6 +1,6 @@
 // ============================================================
-// /api/platform/accounts/[id]/whatsapp — connect a client's number
-// on their behalf.
+// /api/platform/accounts/[id]/whatsapp — connect and disconnect a
+// client's number on their behalf.
 //
 // This is the one screen Altokia runs FOR the customer: the customer
 // owns the Meta app, the WABA and the number, and hands over the
@@ -356,6 +356,92 @@ export async function PUT(
       // Meta's error.
       verify_token_set: Boolean(encryptedVerifyToken || existing?.verify_token),
       waba_subscribed: subscribedAppsAt !== null,
+    })
+  } catch (err) {
+    return toPlatformErrorResponse(err)
+  }
+}
+
+/**
+ * DELETE /api/platform/accounts/[id]/whatsapp
+ *
+ * Takes the client's number offline. This is the half the customer
+ * used to hold — the old "Reset Configuration" button in their own
+ * settings — and it is here now because of what it costs:
+ *
+ *   • the number stops sending and receiving immediately;
+ *   • `webhook_token` goes with the row, so reconnecting mints a NEW
+ *     webhook address that has to be pasted into Meta by hand. There
+ *     is no way to get the old one back.
+ *
+ * Hence `billing` rather than `support`: cutting a paying customer's
+ * WhatsApp is a commercial act, not a diagnostic one. The row is
+ * deleted rather than flagged because `phone_number_id` is UNIQUE
+ * (013) — leaving it behind would block that number from ever being
+ * connected to another client, which is exactly what a disconnection
+ * is usually preparing for.
+ */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const ctx = await requirePlatformOperator('billing')
+    const { id } = await params
+
+    // Read before deleting: once the row is gone there is nothing left
+    // to name in the audit entry, and "which number did we cut" is the
+    // first question anyone asks afterwards.
+    const { data: existing, error: existingError } = await ctx.db
+      .from('whatsapp_config')
+      .select('phone_number_id, waba_id, app_id, status')
+      .eq('account_id', id)
+      .maybeSingle()
+
+    if (existingError) {
+      console.error('[DELETE /api/platform/.../whatsapp] lookup error:', existingError)
+      return NextResponse.json(
+        { error: 'Failed to load the current configuration' },
+        { status: 500 }
+      )
+    }
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'This client has no WhatsApp connection to remove.' },
+        { status: 404 }
+      )
+    }
+
+    const { error: deleteError } = await ctx.db
+      .from('whatsapp_config')
+      .delete()
+      .eq('account_id', id)
+
+    if (deleteError) {
+      console.error('[DELETE /api/platform/.../whatsapp] delete error:', deleteError)
+      return NextResponse.json(
+        { error: 'Failed to disconnect the number' },
+        { status: 500 }
+      )
+    }
+
+    await logPlatformAction(ctx, {
+      accountId: id,
+      action: 'WHATSAPP_DISCONNECTED',
+      detail: {
+        phone_number_id: existing.phone_number_id,
+        waba_id: existing.waba_id,
+        app_id: existing.app_id,
+        previous_status: existing.status,
+        // Said out loud in the log the client can read: reconnecting is
+        // not a one-click undo, it needs Meta touched again.
+        webhook_token_discarded: true,
+      },
+    })
+
+    return NextResponse.json({
+      disconnected: true,
+      phone_number_id: existing.phone_number_id,
     })
   } catch (err) {
     return toPlatformErrorResponse(err)

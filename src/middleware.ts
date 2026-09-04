@@ -42,6 +42,21 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  // /signup no longer exists. Nobody self-registers in this product:
+  // Altokia creates each customer's login from the operator console and
+  // hands over the credentials, and the Supabase project has signups
+  // disabled — the form that used to live here could only ever fail with
+  // "Signups not allowed for this instance". The route file is gone; this
+  // redirect is what keeps old bookmarks and already-shared
+  // `/signup?invite=<token>` links off a 404. Only the pathname changes,
+  // so the query string rides along and /login still forwards an invited
+  // visitor to /join/<token> once they sign in.
+  if (request.nextUrl.pathname === '/signup') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return withRefreshedCookies(NextResponse.redirect(url))
+  }
+
   // Auth pages - redirect to dashboard if already logged in.
   // Exception: when an invite token is in the query string we
   // send the already-signed-in user to /join/<token> instead so
@@ -50,16 +65,11 @@ export async function middleware(request: NextRequest) {
   // would silently drop them on /dashboard.
   if (user && (
     request.nextUrl.pathname === '/login' ||
-    request.nextUrl.pathname === '/signup' ||
     request.nextUrl.pathname === '/forgot-password'
   )) {
     const url = request.nextUrl.clone()
     const inviteToken = request.nextUrl.searchParams.get('invite')
-    if (
-      inviteToken &&
-      (request.nextUrl.pathname === '/login' ||
-        request.nextUrl.pathname === '/signup')
-    ) {
+    if (inviteToken && request.nextUrl.pathname === '/login') {
       url.pathname = `/join/${encodeURIComponent(inviteToken)}`
       url.search = ''
     } else {

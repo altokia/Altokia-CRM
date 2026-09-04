@@ -5,6 +5,11 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
+import { AltokiaLogo } from "@/components/brand/altokia-logo";
+import {
+  ALTOKIA_SURFACE_STYLE,
+  altokiaSurfaceCss,
+} from "@/components/brand/altokia-theme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +18,17 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
-import { MessageSquare, UsersRound } from "lucide-react";
+
+// This screen belongs to Altokia, not to the client: it is the first
+// thing a customer sees, before there is a workspace to have a theme
+// at all. So it pins the brand palette the same way the /platform
+// console does, rather than inheriting whatever accent and light/dark
+// mode the last signed-in person left in localStorage — a sign-in page
+// that changes color depending on who used the browser last is not a
+// front door. `AUTH_CSS` carries the same tokens to anything that
+// renders outside this subtree (toasts).
+const AUTH_CSS = altokiaSurfaceCss("auth");
 
 // `useSearchParams` opts the component out of static prerendering
 // unless it sits under a Suspense boundary. We split the form into
@@ -100,19 +113,29 @@ function LoginPageInner() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md border-border bg-card">
+    <div
+      data-plane="auth"
+      style={ALTOKIA_SURFACE_STYLE}
+      className="flex min-h-screen items-center justify-center bg-background px-4"
+    >
+      <style dangerouslySetInnerHTML={{ __html: AUTH_CSS }} />
+      <Card className="w-full max-w-md bg-card">
+        {/* The one brand gesture on this screen: a hairline seal on the
+            card's top edge. The negative margin cancels the card's own
+            top padding so it sits flush; the card already clips its
+            corners. Everything else stays sober — this is a door, not
+            a cover page. */}
+        <div
+          aria-hidden="true"
+          className="-mt-4 h-0.5 w-full"
+          style={{ backgroundImage: "var(--altokia-gradient)" }}
+        />
         <CardHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            {inviteToken ? (
-              <UsersRound className="h-6 w-6 text-primary" />
-            ) : (
-              <MessageSquare className="h-6 w-6 text-primary" />
-            )}
-          </div>
-          <CardTitle className="text-xl text-foreground">
-            {inviteToken ? t('titleAccept') : t('titleWelcome')}
-          </CardTitle>
+          {/* The wordmark replaces the greeting. The description below
+              still says which of the two arrivals this is (a plain
+              sign-in, or one on the way to accepting an invitation),
+              so nothing is lost by dropping the heading. */}
+          <AltokiaLogo size={22} className="mx-auto mb-3 text-foreground" />
           <CardDescription className="text-muted-foreground">
             {inviteToken
               ? t('descAccept')
@@ -187,18 +210,15 @@ function LoginPageInner() {
             </Button>
           </form>
 
+          {/* There is no self-service sign-up to link to. Altokia creates
+              every login from the operator console and hands the customer
+              their credentials, so a "create account" link would only lead
+              to a form the Supabase project refuses outright. What a
+              stranded visitor actually needs is to know where access comes
+              from, so the footer says that instead of offering a door that
+              isn't there. */}
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            {t('noAccount')}{" "}
-            <Link
-              href={
-                inviteToken
-                  ? `/signup?invite=${encodeURIComponent(inviteToken)}`
-                  : "/signup"
-              }
-              className="text-primary hover:text-primary/80"
-            >
-              {t('createAccount')}
-            </Link>
+            {tAuth('login.noSelfSignup')}
           </p>
         </CardContent>
       </Card>

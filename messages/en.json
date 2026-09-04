@@ -10,14 +10,65 @@
     "forgotPassword": "Forgot password?",
     "passwordPlaceholder": "Enter your password",
     "signingIn": "Signing in...",
-    "signIn": "Sign in",
-    "noAccount": "Don't have an account?",
-    "createAccount": "Create account"
+    "signIn": "Sign in"
   },
   "Auth": {
     "accessRevoked": {
       "title": "Your access is suspended",
       "body": "Contact Altokia to reactivate it."
+    },
+    "login": {
+      "noSelfSignup": "Altokia creates your access. If you don’t have a login, write to us."
+    }
+  },
+  "JoinPage": {
+    "verifying": "Verifying invitation…",
+    "fail": {
+      "not_found": {
+        "title": "Invite not found",
+        "body": "This link doesn’t match a valid invitation. Double-check the URL or ask the person who invited you to send a new one."
+      },
+      "used": {
+        "title": "Invite already used",
+        "body": "This invitation has already been accepted. If that wasn’t you, ask the account admin to send a fresh link."
+      },
+      "expired": {
+        "title": "Invite expired",
+        "body": "This invitation has expired. Ask the account admin to send a new one — they take a few seconds to generate."
+      },
+      "server_error": {
+        "title": "Something went wrong",
+        "body": "We couldn’t verify this invitation right now. Try refreshing the page in a moment."
+      }
+    },
+    "tryAgain": "Try again",
+    "signIn": "Sign in",
+    "signInToJoin": "Sign in to join",
+    "noLoginYet": "Don’t have a login yet? Altokia creates them: write to us and we’ll hand you your username and password, then come back to this link.",
+    "invitedTo": "You’re invited to",
+    "joinAs": "You’ll join as",
+    "validUntil": "Link valid until {date}.",
+    "roles": {
+      "admin": "Admin",
+      "agent": "Agent",
+      "viewer": "Viewer"
+    },
+    "accept": "Accept invitation",
+    "accepting": "Accepting…",
+    "acceptNote": "Accepting moves your login into {account}. The empty workspace it started with is cleaned up.",
+    "conflict": {
+      "title": "Can’t join {account} with this login",
+      "help": "To join {account}, sign out and sign in with the login that belongs there. If you don’t have one, ask Altokia to issue it. This invite link stays valid until it expires.",
+      "fallback": "You are already in another account. Sign in with a different login to join this one.",
+      "stay": "Stay signed in",
+      "switch": "Sign out & use another login",
+      "signingOut": "Signing out…"
+    },
+    "toast": {
+      "welcome": "Welcome to the team",
+      "acceptFailed": "Failed to accept invitation",
+      "network": "Could not reach the server",
+      "signOutFailed": "Could not sign out. Try refreshing the page."
     }
   },
   "Sidebar": {
@@ -1388,6 +1439,7 @@
   "Settings": {
     "pageTitle": "Settings",
     "pageDesc": "Everything in one place — your account and your workspace. Pick a section to manage it.",
+    "whatsappManaged": "Altokia sets up your WhatsApp connection. Write to us if you need it changed.",
     "overview": {
       "notSetup": "Not set up yet",
       "connected": "Connected",
@@ -1438,7 +1490,7 @@
     },
     "invite": {
       "inviteCreated": "Invite created",
-      "inviteCreatedDesc": "Share this link with your new teammate. They'll be able to sign up (or sign in) and join the account as <bold>{role}</bold>. The link is valid for <bold>{days} {days, plural, =1 {day} other {days}}</bold>.",
+      "inviteCreatedDesc": "Share this link with your new teammate. They sign in and join the account as <bold>{role}</bold>. The link is valid for <bold>{days} {days, plural, =1 {day} other {days}}</bold>. If they do not have a login yet, ask Altokia to create it first.",
       "inviteLink": "Invite link",
       "copy": "Copy",
       "saveLinkNow": "Save this link now.",
@@ -2379,7 +2431,23 @@
       "webhookUrl": "Webhook address for this client",
       "webhookHint": "Paste this address into this client's Meta app settings. It is different for every client.",
       "verifyToken": "Verify token",
-      "saved": "Number connected"
+      "saved": "Number connected",
+      "connected": "Number connected",
+      "notConnected": "Not connected",
+      "nothingConnected": "This client has no number connected yet.",
+      "registered": "Registered with Meta on {date}",
+      "notRegistered": "Not registered with Meta — inbound messages will not arrive.",
+      "lastError": "Last error from Meta: {error}",
+      "verify": "Check with Meta",
+      "verifyLive": "All good — Meta is delivering messages.",
+      "verifyNotLive": "Something is missing. See the checks below.",
+      "verifyFailed": "Could not check with Meta",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect the client's number",
+      "disconnectWarning": "The client stops sending and receiving messages immediately. Their webhook address goes with it — reconnecting means pasting a new one into Meta.",
+      "disconnectConfirm": "Yes, disconnect",
+      "disconnected": "Number disconnected",
+      "verifyTokenHint": "Make one up and paste the same text into the webhook settings in Meta. It is how Meta and the CRM recognise each other."
     },
     "access": {
       "none": "You do not have access to this client's content.",
