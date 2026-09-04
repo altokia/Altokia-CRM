@@ -2,6 +2,7 @@ import {
   Bookmark,
   Coins,
   FileText,
+  LifeBuoy,
   Package,
   KeyRound,
   LayoutGrid,
@@ -39,6 +40,7 @@ export const SETTINGS_SECTIONS = [
   'deals',
   'members',
   'api',
+  'support',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -68,6 +70,9 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
+  // Last in the rail on purpose: the Altokia team asking to look at
+  // this account is rare, and an empty panel here is the healthy state.
+  support: { id: 'support', label: 'Altokia support', icon: LifeBuoy, group: 'workspace' },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [

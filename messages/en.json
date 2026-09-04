@@ -1652,7 +1652,8 @@
       "api": "API keys",
       "catalog": "Catalog",
       "labels": "Lead labels",
-      "terminology": "Terminology"
+      "terminology": "Terminology",
+      "support": "Altokia support"
     },
     "groups": {
       "account": "Account",
@@ -2052,6 +2053,21 @@
         "pipeline": "Pipeline, Process, Sales route.",
         "catalogItem": "Course, Apartment, Treatment, Product."
       }
+    },
+    "support": {
+      "title": "Altokia team access",
+      "description": "When you ask for help, the Altokia team may need to see your conversations. You decide here, and every step is recorded.",
+      "noRequests": "Nobody has asked for access to your data.",
+      "pending": "Asked for access",
+      "reason": "Reason",
+      "approve": "Approve",
+      "deny": "Deny",
+      "revoke": "Remove access",
+      "activeUntil": "Has access until {until}",
+      "approved": "Access approved",
+      "revoked": "Access removed",
+      "history": "What the Altokia team did",
+      "historyEmpty": "The Altokia team has not been into your account."
     }
   },
   "MyWork": {
@@ -2165,5 +2181,131 @@
     "advisors": "Advisors",
     "pipeline": "Pipeline",
     "catalogItem": "Product"
+  },
+  "Platform": {
+    "title": "Altokia Console",
+    "subtitle": "The businesses using the platform.",
+    "nav": {
+      "clients": "Clients",
+      "audit": "Activity",
+      "operators": "Team"
+    },
+    "clients": {
+      "title": "Clients",
+      "search": "Search by name or number",
+      "empty": "No clients yet.",
+      "new": "New client",
+      "name": "Company",
+      "status": "Status",
+      "plan": "Plan",
+      "number": "Number",
+      "notConnected": "Not connected",
+      "lastActivity": "Last activity",
+      "never": "Never",
+      "people": "{count} {count, plural, =1 {person} other {people}}",
+      "created": "Added"
+    },
+    "status": {
+      "trial": "Trial",
+      "active": "Active",
+      "suspended": "Suspended",
+      "cancelled": "Cancelled"
+    },
+    "actions": {
+      "suspend": "Suspend",
+      "reactivate": "Reactivate",
+      "save": "Save",
+      "cancel": "Cancel",
+      "requestAccess": "Request access",
+      "openCrm": "Open the client's CRM"
+    },
+    "suspend": {
+      "title": "Suspend {name}",
+      "reason": "Reason",
+      "reasonPlaceholder": "The client sees this if they ask",
+      "warning": "While suspended they cannot send or receive messages.",
+      "confirm": "Suspend",
+      "done": "Client suspended"
+    },
+    "new": {
+      "title": "Add a client",
+      "name": "Company name",
+      "ownerEmail": "Owner's email",
+      "plan": "Plan",
+      "timezone": "Time zone",
+      "submit": "Create and generate invite",
+      "done": "Client created. Copy the invite link.",
+      "copyLink": "Copy link",
+      "linkHint": "The owner opens this link, sets a password and lands in their CRM."
+    },
+    "detail": {
+      "health": "Health",
+      "whatsapp": "WhatsApp",
+      "usage": "Usage",
+      "access": "Support access",
+      "settings": "Client settings"
+    },
+    "health": {
+      "connected": "Number connected",
+      "webhook": "Receiving messages",
+      "ai": "Assistant set up",
+      "team": "Team",
+      "ok": "Good",
+      "bad": "Missing"
+    },
+    "usage": {
+      "messages": "Messages (30 days)",
+      "aiReplies": "AI replies (30 days)",
+      "contacts": "Contacts",
+      "storage": "Files"
+    },
+    "whatsapp": {
+      "title": "Connect the client's number",
+      "phoneNumberId": "Phone number ID",
+      "wabaId": "WhatsApp Business account ID",
+      "token": "Permanent token",
+      "appId": "App ID",
+      "appSecret": "App secret",
+      "webhookUrl": "Webhook address for this client",
+      "webhookHint": "Paste this address into this client's Meta app settings. It is different for every client.",
+      "verifyToken": "Verify token",
+      "saved": "Number connected"
+    },
+    "access": {
+      "none": "You do not have access to this client's content.",
+      "pending": "Request sent. A client admin still has to approve it.",
+      "granted": "Access valid until {until}",
+      "reason": "What you need it for",
+      "reasonPlaceholder": "e.g. check why their messages are not arriving",
+      "hours": "For how many hours",
+      "request": "Request access",
+      "requested": "Request sent to the client"
+    },
+    "audit": {
+      "title": "Team activity",
+      "empty": "No activity recorded.",
+      "operator": "Who",
+      "action": "What",
+      "client": "Client",
+      "when": "When"
+    },
+    "operators": {
+      "title": "Altokia team",
+      "add": "Add",
+      "email": "Email",
+      "role": "Role",
+      "roles": {
+        "support": "Support",
+        "billing": "Billing",
+        "owner": "Owner"
+      },
+      "note": "Note",
+      "added": "Operator added",
+      "removed": "Operator removed"
+    },
+    "errors": {
+      "generic": "Something went wrong",
+      "notOperator": "You do not have access to this console."
+    }
   }
 }

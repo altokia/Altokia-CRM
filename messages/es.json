@@ -1652,7 +1652,8 @@
       "api": "Claves API",
       "catalog": "Catálogo",
       "labels": "Etiquetas de lead",
-      "terminology": "Terminología"
+      "terminology": "Terminología",
+      "support": "Soporte de Altokia"
     },
     "groups": {
       "account": "Cuenta",
@@ -2052,6 +2053,21 @@
         "pipeline": "Embudo, Proceso, Ruta de venta.",
         "catalogItem": "Curso, Departamento, Tratamiento, Producto."
       }
+    },
+    "support": {
+      "title": "Acceso del equipo de Altokia",
+      "description": "Cuando pidas ayuda, el equipo de Altokia puede necesitar ver tus conversaciones. Aquí decides tú, y queda registrado.",
+      "noRequests": "Nadie ha pedido acceso a tus datos.",
+      "pending": "Pidió acceso",
+      "reason": "Motivo",
+      "approve": "Aprobar",
+      "deny": "Rechazar",
+      "revoke": "Quitar acceso",
+      "activeUntil": "Con acceso hasta {until}",
+      "approved": "Acceso aprobado",
+      "revoked": "Acceso retirado",
+      "history": "Lo que hizo el equipo de Altokia",
+      "historyEmpty": "El equipo de Altokia no ha entrado a tu cuenta."
     }
   },
   "MyWork": {
@@ -2165,5 +2181,131 @@
     "advisors": "Asesores",
     "pipeline": "Pipeline",
     "catalogItem": "Producto"
+  },
+  "Platform": {
+    "title": "Consola Altokia",
+    "subtitle": "Los negocios que usan la plataforma.",
+    "nav": {
+      "clients": "Clientes",
+      "audit": "Actividad",
+      "operators": "Equipo"
+    },
+    "clients": {
+      "title": "Clientes",
+      "search": "Buscar por nombre o número",
+      "empty": "Todavía no hay clientes.",
+      "new": "Nuevo cliente",
+      "name": "Empresa",
+      "status": "Estado",
+      "plan": "Plan",
+      "number": "Número",
+      "notConnected": "Sin conectar",
+      "lastActivity": "Última actividad",
+      "never": "Nunca",
+      "people": "{count} {count, plural, =1 {persona} other {personas}}",
+      "created": "Alta"
+    },
+    "status": {
+      "trial": "Prueba",
+      "active": "Activo",
+      "suspended": "Suspendido",
+      "cancelled": "Cancelado"
+    },
+    "actions": {
+      "suspend": "Suspender",
+      "reactivate": "Reactivar",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "requestAccess": "Pedir acceso",
+      "openCrm": "Abrir el CRM del cliente"
+    },
+    "suspend": {
+      "title": "Suspender a {name}",
+      "reason": "Motivo",
+      "reasonPlaceholder": "Lo ve el cliente si pregunta",
+      "warning": "Mientras esté suspendido no podrá enviar ni recibir mensajes.",
+      "confirm": "Suspender",
+      "done": "Cliente suspendido"
+    },
+    "new": {
+      "title": "Dar de alta un cliente",
+      "name": "Nombre de la empresa",
+      "ownerEmail": "Correo del dueño",
+      "plan": "Plan",
+      "timezone": "Zona horaria",
+      "submit": "Crear y generar invitación",
+      "done": "Cliente creado. Copia el enlace de invitación.",
+      "copyLink": "Copiar enlace",
+      "linkHint": "El dueño abre este enlace, crea su clave y entra a su CRM."
+    },
+    "detail": {
+      "health": "Salud",
+      "whatsapp": "WhatsApp",
+      "usage": "Consumo",
+      "access": "Acceso de soporte",
+      "settings": "Ajustes del cliente"
+    },
+    "health": {
+      "connected": "Número conectado",
+      "webhook": "Recibiendo mensajes",
+      "ai": "Asistente configurado",
+      "team": "Equipo",
+      "ok": "Bien",
+      "bad": "Falta"
+    },
+    "usage": {
+      "messages": "Mensajes (30 días)",
+      "aiReplies": "Respuestas de IA (30 días)",
+      "contacts": "Contactos",
+      "storage": "Archivos"
+    },
+    "whatsapp": {
+      "title": "Conectar el número del cliente",
+      "phoneNumberId": "Identificador del número",
+      "wabaId": "Identificador de la cuenta de WhatsApp Business",
+      "token": "Token permanente",
+      "appId": "Identificador de la aplicación",
+      "appSecret": "Clave secreta de la aplicación",
+      "webhookUrl": "Dirección del webhook para este cliente",
+      "webhookHint": "Pega esta dirección en la configuración de la aplicación de Meta de este cliente. Es distinta para cada uno.",
+      "verifyToken": "Identificador de verificación",
+      "saved": "Número conectado"
+    },
+    "access": {
+      "none": "No tienes acceso al contenido de este cliente.",
+      "pending": "Solicitud enviada. Falta que la apruebe un administrador del cliente.",
+      "granted": "Acceso vigente hasta {until}",
+      "reason": "Para qué lo necesitas",
+      "reasonPlaceholder": "Ej.: revisar por qué no le llegan los mensajes",
+      "hours": "Por cuántas horas",
+      "request": "Pedir acceso",
+      "requested": "Solicitud enviada al cliente"
+    },
+    "audit": {
+      "title": "Actividad del equipo",
+      "empty": "Sin actividad registrada.",
+      "operator": "Quién",
+      "action": "Qué",
+      "client": "Cliente",
+      "when": "Cuándo"
+    },
+    "operators": {
+      "title": "Equipo de Altokia",
+      "add": "Agregar",
+      "email": "Correo",
+      "role": "Rol",
+      "roles": {
+        "support": "Soporte",
+        "billing": "Facturación",
+        "owner": "Dueño"
+      },
+      "note": "Nota",
+      "added": "Operador agregado",
+      "removed": "Operador quitado"
+    },
+    "errors": {
+      "generic": "Algo salió mal",
+      "notOperator": "No tienes acceso a esta consola."
+    }
   }
 }

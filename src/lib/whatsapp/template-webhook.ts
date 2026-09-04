@@ -79,18 +79,33 @@ export async function handleTemplateWebhookChange(
   // the admin client and exposes it as `any`. Type as the generic
   // SupabaseClient here so this module is testable in isolation.
   supabase: SupabaseClient,
+  /**
+   * Account that owns the webhook address this event arrived on.
+   *
+   * Template events carry no phone_number_id, so the tenant pin in
+   * processWebhook cannot see them — they are keyed only on
+   * meta_template_id, which is not unique across tenants in our schema.
+   * A tenant that owns its Meta app signs its own bodies, so without
+   * this it could name another tenant's template id and have the
+   * service-role client rewrite that template's status. Passed only by
+   * the per-tenant route; the shared route omits it and keeps its
+   * historical behaviour.
+   */
+  accountId?: string,
 ): Promise<void> {
   switch (change.field) {
     case 'message_template_status_update':
       await handleStatusUpdate(
         change.value as TemplateStatusUpdateValue,
         supabase,
+        accountId,
       )
       return
     case 'message_template_quality_update':
       await handleQualityUpdate(
         change.value as TemplateQualityUpdateValue,
         supabase,
+        accountId,
       )
       return
     case 'message_template_components_update':
@@ -104,6 +119,7 @@ export async function handleTemplateWebhookChange(
 async function handleStatusUpdate(
   value: TemplateStatusUpdateValue,
   supabase: SupabaseClient,
+  accountId?: string,
 ): Promise<void> {
   const metaTemplateId =
     value.message_template_id !== undefined
@@ -130,11 +146,14 @@ async function handleStatusUpdate(
     submission_error: null,
   }
 
-  const { data, error } = await supabase
+  // Scoped to the owning account when the event came in on a
+  // per-tenant address: meta_template_id alone is attacker-chosen.
+  const statusQuery = supabase
     .from('message_templates')
     .update(update)
     .eq('meta_template_id', metaTemplateId)
-    .select('id')
+  if (accountId) statusQuery.eq('account_id', accountId)
+  const { data, error } = await statusQuery.select('id')
 
   if (error) {
     console.error(
@@ -162,6 +181,7 @@ async function handleStatusUpdate(
 async function handleQualityUpdate(
   value: TemplateQualityUpdateValue,
   supabase: SupabaseClient,
+  accountId?: string,
 ): Promise<void> {
   const metaTemplateId =
     value.message_template_id !== undefined
@@ -181,10 +201,12 @@ async function handleQualityUpdate(
       ? (raw.toUpperCase() as 'GREEN' | 'YELLOW' | 'RED')
       : null
 
-  const { error } = await supabase
+  const qualityQuery = supabase
     .from('message_templates')
     .update({ quality_score: score })
     .eq('meta_template_id', metaTemplateId)
+  if (accountId) qualityQuery.eq('account_id', accountId)
+  const { error } = await qualityQuery
 
   if (error) {
     console.error(

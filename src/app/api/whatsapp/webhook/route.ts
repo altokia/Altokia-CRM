@@ -1,3 +1,22 @@
+// ============================================================
+// /api/whatsapp/webhook — the SHARED webhook address.
+//
+// This route has no tenant in its path, so it can only verify
+// signatures with the deployment-wide META_APP_SECRET. It stays as the
+// address of the original single-tenant install (and of any client
+// connected through Altokia's own Meta app).
+//
+// Clients that bring their OWN Meta app get their own address instead:
+// /api/whatsapp/webhook/[token], where <token> is
+// whatsapp_config.webhook_token (migration 045). Only an address that
+// names the tenant can pick the right App Secret BEFORE verifying the
+// body — see that file's header for the full argument.
+//
+// The inbound pipeline lives HERE and is exported (`processWebhook`)
+// for the per-tenant route to call. Do not fork it: two copies diverge
+// on the first bug fix.
+// ============================================================
+
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
@@ -72,7 +91,7 @@ interface WhatsAppMessage {
   context?: { id: string }
 }
 
-interface WhatsAppWebhookEntry {
+export interface WhatsAppWebhookEntry {
   id: string
   changes: Array<{
     value: {
@@ -226,7 +245,46 @@ export async function POST(request: Request) {
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }
 
-async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
+export interface ProcessWebhookOptions {
+  /**
+   * When set, only changes addressed to THIS phone number are
+   * processed; anything else in the payload is dropped with a log.
+   *
+   * The per-tenant route passes the phone_number_id of the
+   * whatsapp_config row whose webhook_token was in the URL. Without it,
+   * a tenant that knows its own App Secret (it owns the Meta app —
+   * that's the whole premise of per-tenant credentials) could sign a
+   * payload naming ANOTHER tenant's phone_number_id and POST it to its
+   * own webhook address: the signature would check out and the lookup
+   * below would file the forged messages into the victim's inbox.
+   * Pinning the number closes that, and because the check sits on the
+   * change's `value.metadata` it covers the status branch too.
+   *
+   * Omitted by the shared route, which keeps its historical behaviour
+   * of resolving whatever phone_number_id the payload names.
+   */
+  expectedPhoneNumberId?: string | null
+
+  /**
+   * The account that owns the webhook address this delivery arrived on.
+   *
+   * Two branches write by a Meta-assigned id alone — template events
+   * (keyed on meta_template_id) and delivery statuses (keyed on the
+   * message id Meta returned) — and neither id is scoped to a tenant in
+   * our schema. A tenant signing its own bodies could therefore name
+   * another tenant's template or message and have the service-role
+   * client write it. Passing the owning account turns both writes into
+   * account-scoped ones.
+   *
+   * Omitted by the shared route, which keeps its historical behaviour.
+   */
+  expectedAccountId?: string | null
+}
+
+export async function processWebhook(
+  body: { entry?: WhatsAppWebhookEntry[] },
+  options: ProcessWebhookOptions = {},
+) {
   if (!body.entry) return
 
   for (const entry of body.entry) {
@@ -240,16 +298,41 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
         await handleTemplateWebhookChange(
           { field: change.field, value: change.value as unknown },
           supabaseAdmin(),
+          options.expectedAccountId ?? undefined,
         )
         continue
       }
 
       const value = change.value
 
+      // Tenant pin (see ProcessWebhookOptions). Placed after the
+      // template short-circuit above on purpose: template-lifecycle
+      // events carry no `metadata.phone_number_id` — they're keyed by
+      // meta_template_id, which is unique per WABA — so there is
+      // nothing to compare and they pass through as before.
+      // Presence, not truthiness: an empty or null phone_number_id on
+      // the token's row would otherwise switch the pin off entirely and
+      // fall back to trusting whatever number the payload names — which
+      // is the exact injection this guard exists to stop.
+      if (
+        'expectedPhoneNumberId' in options &&
+        value.metadata?.phone_number_id !== options.expectedPhoneNumberId
+      ) {
+        console.warn(
+          '[webhook] change addressed to a different phone_number_id than the ' +
+            'webhook token it arrived on — dropped.',
+          'expected:',
+          options.expectedPhoneNumberId,
+          'got:',
+          value.metadata?.phone_number_id,
+        )
+        continue
+      }
+
       // Handle status updates
       if (value.statuses) {
         for (const status of value.statuses) {
-          await handleStatusUpdate(status)
+          await handleStatusUpdate(status, options.expectedAccountId ?? undefined)
         }
       }
 
@@ -364,24 +447,60 @@ function isValidStatusTransition(current: string, incoming: string): boolean {
   return ii > ci
 }
 
-async function handleStatusUpdate(status: {
-  id: string
-  status: string
-  timestamp: string
-  recipient_id: string
-}) {
+async function handleStatusUpdate(
+  status: {
+    id: string
+    status: string
+    timestamp: string
+    recipient_id: string
+  },
+  /**
+   * Owning account, when the delivery came in on a per-tenant address.
+   * Both mirrors below key on a Meta id that is not tenant-scoped in
+   * our schema, so without this a tenant could name another tenant's
+   * message id and move its status — and, through the aggregate
+   * trigger, corrupt that tenant's broadcast counters.
+   */
+  expectedAccountId?: string,
+) {
   // 1) Mirror onto messages (legacy behavior) — Meta's status values
   //    already match the CHECK constraint on messages.status. No
   //    `.select()`: message_id is NOT unique (migration 009 — Meta ids
   //    repeat across numbers), so this updates 0..N rows and must not
   //    assume a single row.
-  const { error: msgErr } = await supabaseAdmin()
-    .from('messages')
-    .update({ status: status.status })
-    .eq('message_id', status.id)
+  //
+  //    messages has no account_id, so scoping means resolving the ids
+  //    through conversations first and updating by primary key.
+  if (expectedAccountId) {
+    const { data: owned, error: ownedErr } = await supabaseAdmin()
+      .from('messages')
+      .select('id, conversations!inner(account_id)')
+      .eq('message_id', status.id)
+      .eq('conversations.account_id', expectedAccountId)
 
-  if (msgErr) {
-    console.error('Error updating message status:', msgErr)
+    if (ownedErr) {
+      console.error('Error resolving message for status update:', ownedErr)
+    } else if (owned && owned.length > 0) {
+      const { error: scopedErr } = await supabaseAdmin()
+        .from('messages')
+        .update({ status: status.status })
+        .in(
+          'id',
+          (owned as Array<{ id: string }>).map((m) => m.id),
+        )
+      if (scopedErr) {
+        console.error('Error updating message status:', scopedErr)
+      }
+    }
+  } else {
+    const { error: msgErr } = await supabaseAdmin()
+      .from('messages')
+      .update({ status: status.status })
+      .eq('message_id', status.id)
+
+    if (msgErr) {
+      console.error('Error updating message status:', msgErr)
+    }
   }
 
   // Webhook fan-out for this status change happens at the END of this
@@ -394,11 +513,18 @@ async function handleStatusUpdate(status: {
   //    sent/delivered/read/failed counts automatically.
   const tsIso = new Date(parseInt(status.timestamp) * 1000).toISOString()
 
-  const { data: recipient, error: recFetchErr } = await supabaseAdmin()
+  // Same scoping for the broadcast mirror: the join is what keeps one
+  // tenant's status callback off another tenant's campaign counters.
+  const recipientQuery = supabaseAdmin()
     .from('broadcast_recipients')
-    .select('id, status')
+    .select(
+      expectedAccountId ? 'id, status, broadcasts!inner(account_id)' : 'id, status',
+    )
     .eq('whatsapp_message_id', status.id)
-    .maybeSingle()
+  if (expectedAccountId) {
+    recipientQuery.eq('broadcasts.account_id', expectedAccountId)
+  }
+  const { data: recipient, error: recFetchErr } = await recipientQuery.maybeSingle()
 
   if (recFetchErr) {
     console.error('Error fetching broadcast recipient:', recFetchErr)

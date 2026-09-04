@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireRole, toErrorResponse } from '@/lib/auth/account'
+import { assertAccountActive, requireRole, toErrorResponse } from '@/lib/auth/account'
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -32,7 +32,12 @@ export async function POST(request: Request) {
     // still delivered a real WhatsApp message to the customer and merely
     // failed to record it (surfacing as "sent to Meta but failed to save
     // to DB"). RLS can't un-send that, so the role check belongs here.
-    const { supabase, accountId, userId } = await requireRole('agent')
+    const ctx = await requireRole('agent')
+    const { supabase, accountId, userId } = ctx
+    // A suspended customer keeps their inbox readable but cannot send.
+    // Checked here as well as in lib/flows/meta-send so the person
+    // typing gets a clear refusal instead of a generic failure.
+    assertAccountActive(ctx)
 
     // Per-user rate limit. Bucket key is scoped to this route so
     // `/broadcast` has an independent budget.

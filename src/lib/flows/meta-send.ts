@@ -62,6 +62,25 @@ interface SendTextEngineArgs {
  * `engineSendBase` once the v2 features (templates with variables,
  * media sends) settle.
  */
+/**
+ * Refuse to reach WhatsApp on behalf of a customer who is not in good
+ * standing with Altokia (migration 045).
+ *
+ * Takes the embedded `accounts(status)` row straight off the config
+ * lookup. PostgREST returns an embedded one-to-one as either an object
+ * or a single-element array depending on how it resolves the
+ * relationship, so both shapes are handled. An absent or unrecognised
+ * status is treated as sendable: a schema surprise must never silence a
+ * paying customer's assistant.
+ */
+function assertSendableAccount(embedded: unknown): void {
+  const row = Array.isArray(embedded) ? embedded[0] : embedded
+  const status = (row as { status?: unknown } | null)?.status
+  if (status === 'suspended' || status === 'cancelled') {
+    throw new Error(`account is ${status}: outbound sending is disabled`)
+  }
+}
+
 export async function engineSendText(
   args: SendTextEngineArgs,
 ): Promise<{ whatsapp_message_id: string }> {
@@ -82,14 +101,21 @@ export async function engineSendText(
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
+  // The account's standing rides along on the config lookup rather than
+  // costing a second round trip on every outbound message. Every
+  // machine-generated send passes through this module — AI auto-replies,
+  // automation steps, flow nodes — so a suspended customer stops
+  // sending from one place instead of from four. Their own data stays
+  // readable; see assertAccountActive in lib/auth/account.
   const { data: config, error: configErr } = await db
     .from('whatsapp_config')
-    .select('*')
+    .select('*, account:accounts(status)')
     .eq('account_id', args.accountId)
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
   }
+  assertSendableAccount(config.account)
 
   const accessToken = decrypt(config.access_token)
 
@@ -192,14 +218,21 @@ export async function engineSendMedia(
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
+  // The account's standing rides along on the config lookup rather than
+  // costing a second round trip on every outbound message. Every
+  // machine-generated send passes through this module — AI auto-replies,
+  // automation steps, flow nodes — so a suspended customer stops
+  // sending from one place instead of from four. Their own data stays
+  // readable; see assertAccountActive in lib/auth/account.
   const { data: config, error: configErr } = await db
     .from('whatsapp_config')
-    .select('*')
+    .select('*, account:accounts(status)')
     .eq('account_id', args.accountId)
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
   }
+  assertSendableAccount(config.account)
 
   const accessToken = decrypt(config.access_token)
 
@@ -346,12 +379,13 @@ async function sendInteractiveViaMeta(
 
   const { data: config, error: configErr } = await db
     .from('whatsapp_config')
-    .select('*')
+    .select('*, account:accounts(status)')
     .eq('account_id', input.accountId)
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
   }
+  assertSendableAccount(config.account)
 
   const accessToken = decrypt(config.access_token)
 

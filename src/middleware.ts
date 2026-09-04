@@ -70,7 +70,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected pages - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/inbox', '/my-work', '/contacts', '/pipelines', '/broadcasts', '/automations', '/flows', '/agents', '/notifications', '/settings']
+  // `/platform` is the Altokia operator console, not a tenant screen.
+  // Being signed in is only the first gate: whether this user is staff
+  // is decided per request by requirePlatformOperator, which reads the
+  // roster server-side. The middleware deliberately does not check the
+  // role — that would need a database round trip on every navigation,
+  // and the console's own pages already refuse a non-operator.
+  const protectedPaths = ['/dashboard', '/inbox', '/my-work', '/contacts', '/pipelines', '/broadcasts', '/automations', '/flows', '/agents', '/notifications', '/settings', '/platform']
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

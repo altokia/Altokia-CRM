@@ -21,6 +21,7 @@ import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { CatalogManager } from '@/components/settings/catalog-manager';
 import { LabelsManager } from '@/components/settings/labels-manager';
 import { TerminologySettings } from '@/components/settings/terminology-settings';
+import { SupportAccess } from '@/components/settings/support-access';
 import {
   resolveSection,
   type SettingsSection,
@@ -87,6 +88,7 @@ function SettingsPageInner() {
     deals: <DealsSettings />,
     members: <MembersTab />,
     api: <ApiKeysSettings />,
+    support: <SupportAccess />,
   };
 
   return (

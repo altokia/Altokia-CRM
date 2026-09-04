@@ -56,7 +56,17 @@ curl -H "x-cron-secret: <secret>" http://localhost:3000/api/tasks/cron
 ## What the tasks cron reports
 
 ```json
-{ "retried": 3, "assigned": 1, "reminded": 0 }
+{
+  "retried": 3,
+  "assigned": 1,
+  "reminded": 0,
+  "accounts_scanned": 120,
+  "accounts_queried": 4,
+  "accounts_capped": 0,
+  "has_more": false,
+  "next_cursor": null,
+  "stopped_by": "exhausted"
+}
 ```
 
 `retried` is how many waiting tasks were re-evaluated, `assigned` how
@@ -65,6 +75,33 @@ reminders went out. Each pass is bounded to 50 tasks per account and is
 safe to overlap: assignments go through the same claim-style updates
 the rest of the app uses, and a reminder is sent at most once per task
 (`tasks.due_notified_at`).
+
+The rest of the fields are about coverage, and they matter once there
+is more than a handful of accounts.
+
+A pass does not walk every account. It takes a bounded slice, ordered
+by when this job last touched each account — never touched first, then
+whoever has waited longest — and stamps the ones it got through
+(`accounts.cron_tasks_at`, and the sibling columns for the other two
+jobs). Successive ticks therefore sweep the whole customer list on
+their own. **You do not need to pass a cursor**, and the crontab above
+is complete as written: the schedule resumes from the database, not
+from whatever the last response said. That is deliberate, because the
+pinger pipes its output to `/dev/null`.
+
+Read the fields like this:
+
+| Field | Meaning |
+| --- | --- |
+| `accounts_scanned` | Accounts this pass advanced past. |
+| `accounts_queried` | Of those, how many actually had work. |
+| `accounts_capped` | Accounts that were visited and still have work left over, because the per-account read is bounded. |
+| `has_more` | True when work remains — either accounts not reached, or capped ones. |
+| `stopped_by` | `exhausted` (nothing left), `account_cap`, `time_budget`, or `row_cap`. |
+
+`has_more: true` on every single pass, sustained over hours, is the
+signal that the schedule is too slow for the number of accounts. Run it
+more often before raising any limit.
 
 ## Why every few minutes, not exactly at shift start
 

@@ -87,8 +87,43 @@ export interface AccountContext {
   accountId: string;
   /** Caller's role within their account. */
   role: AccountRole;
-  /** Lightweight account meta — id + name. */
-  account: { id: string; name: string };
+  /**
+   * Lightweight account meta. `status` arrives with migration 045 and
+   * is the tenant's standing with Altokia — a suspended customer keeps
+   * full read access to their own data (they have to be able to see
+   * what they are paying for, and to fix whatever caused it) but may
+   * not send. Enforce it with `assertAccountActive`, never by hiding
+   * the data.
+   */
+  account: { id: string; name: string; status: AccountStatus };
+}
+
+export const ACCOUNT_STATUSES = ['trial', 'active', 'suspended', 'cancelled'] as const;
+export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+
+function isAccountStatus(value: unknown): value is AccountStatus {
+  return (
+    typeof value === "string" &&
+    (ACCOUNT_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Refuse an action that costs the customer money or reaches the outside
+ * world when the account is not in good standing.
+ *
+ * Called by the send paths, not by reads. The message names the state
+ * on purpose: "contact Altokia" with no reason is how a support ticket
+ * becomes a phone call.
+ */
+export function assertAccountActive(ctx: AccountContext): void {
+  const status = ctx.account.status;
+  if (status === "active" || status === "trial") return;
+  throw new ForbiddenError(
+    status === "suspended"
+      ? "This account is suspended. Sending is disabled until it is reactivated."
+      : "This account is cancelled. Sending is disabled.",
+  );
 }
 
 /**
@@ -149,7 +184,7 @@ export async function getCurrentAccount(): Promise<AccountContext> {
   // RLS, so it stays robust against cache staleness and older schemas.
   const { data: account, error: accountErr } = await supabase
     .from("accounts")
-    .select("id, name")
+    .select("id, name, status")
     .eq("id", data.account_id)
     .maybeSingle();
 
@@ -168,7 +203,14 @@ export async function getCurrentAccount(): Promise<AccountContext> {
     userId: user.id,
     accountId: data.account_id,
     role: data.account_role,
-    account: { id: account.id, name: account.name },
+    // A row written before 045, or an enum widened without updating
+    // this file, must not lock a paying customer out of sending —
+    // default to active and let the platform console be the authority.
+    account: {
+      id: account.id,
+      name: account.name,
+      status: isAccountStatus(account.status) ? account.status : "active",
+    },
   };
 }
 
